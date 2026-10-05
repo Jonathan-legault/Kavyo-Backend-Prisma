@@ -193,7 +193,7 @@ Example response from the main development database:
 ```json
 {
   "database": "connected",
-  "products": 62575,
+  "products": 5,
   "retailers": 3,
   "stores": 3,
   "priceObservations": 15
