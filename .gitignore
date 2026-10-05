@@ -59,4 +59,9 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# AI/editor local configuration
+.agents/
+.claude/
+.windsurf/
+
 /generated/prisma

@@ -1,114 +1,282 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Kavyo Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Kavyo is a Calgary-focused grocery decision platform prototype. This backend supports the data layer for product matching, store pricing, basket comparison, promotion handling, and future route-aware grocery recommendations.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Current Status
 
-## Description
+- NestJS project running
+- PostgreSQL connected through Prisma
+- Prisma migrations and seed configured
+- 62,575 products currently loaded in the main local development database
+- 3 retailers and 3 Calgary test stores
+- 15 verified real price observations across 5 products and 3 stores
+- `GET /db-check` successfully reads PostgreSQL data through Prisma
+- Authentication, login, JWT, basket comparison, and recommendation logic are not implemented yet
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- Node.js
+- TypeScript
+- NestJS
+- Prisma 7
+- PostgreSQL
+- `@prisma/adapter-pg`
+- npm
 
-```bash
-$ npm install
+## Project Structure
+
+```text
+kavyo-backend/
+├── prisma/
+│   ├── migrations/
+│   ├── schema.prisma
+│   ├── seed.ts
+│   └── test-data/
+│       └── kavyo_test_data_final.sql
+├── src/
+│   ├── generated/prisma/      # generated locally; ignored by Git
+│   ├── prisma/
+│   │   ├── prisma.module.ts
+│   │   └── prisma.service.ts
+│   ├── app.controller.ts
+│   ├── app.module.ts
+│   ├── app.service.ts
+│   └── main.ts
+├── .env.example
+├── .gitignore
+├── package.json
+└── README.md
 ```
 
-## Compile and run the project
+## Prerequisites
+
+Install:
+
+- Node.js
+- npm
+- PostgreSQL
+- Git
+
+pgAdmin is optional.
+
+## Local Setup
+
+### 1. Clone and install
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone <repository-url>
+cd kavyo-backend
+npm install
 ```
 
-## Run tests
+### 2. Configure environment
+
+Copy `.env.example` to `.env`.
+
+Example:
+
+```env
+DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/kavyo_dev"
+```
+
+Do not commit `.env`.
+
+### 3. Create the database
+
+Create a PostgreSQL database named:
+
+```text
+kavyo_dev
+```
+
+### 4. Generate Prisma client
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npx prisma generate
 ```
 
-## Deployment
+The generated client is placed in:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```text
+src/generated/prisma
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 5. Apply migrations
+
+For normal local development:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npx prisma migrate dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+For deployment-style migration application:
 
-## Observability
+```bash
+npx prisma migrate deploy
+```
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+### 6. Seed reference data
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+```bash
+npx prisma db seed
+```
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+The seed includes roles, source systems, retailers, and the three current Calgary test stores.
 
-## Resources
+## Optional Real Test Fixture
 
-Check out a few resources that may come in handy when working with NestJS:
+The repository contains:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```text
+prisma/test-data/kavyo_test_data_final.sql
+```
 
-## Support
+It creates or updates:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+- 5 exact grocery products
+- 3 retailer website source systems
+- 3 ingest batches
+- 15 real price observations
 
-## Stay in touch
+It does **not** require the full 62,575-product catalogue.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Run with `psql` if available:
 
-## License
+```bash
+psql -U postgres -d kavyo_dev -f prisma/test-data/kavyo_test_data_final.sql
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Or execute the file from pgAdmin Query Tool.
+
+Expected fixture result:
+
+```text
+5 products
+3 stores
+15 price observations
+```
+
+## Current Test Products
+
+- Kellogg's Froot Loops, 480 g
+- Kellogg's Frosted Flakes, 545 g
+- Kellogg's Rice Krispies, 560 g
+- Kellogg's Two Scoops Raisin Bran, 600 g
+- Kraft Smooth Peanut Butter, 1 kg
+
+Current test stores:
+
+- Save-On-Foods Seton
+- Real Canadian Superstore Seton Way
+- Sobeys Mahogany
+
+## Run the Backend
+
+```bash
+npm run start:dev
+```
+
+API:
+
+```text
+http://localhost:3000
+```
+
+Current database test endpoint:
+
+```text
+GET /db-check
+```
+
+Example response from the main development database:
+
+```json
+{
+  "database": "connected",
+  "products": 62575,
+  "retailers": 3,
+  "stores": 3,
+  "priceObservations": 15
+}
+```
+
+## Database Model
+
+Current Prisma models include:
+
+- Users
+- Roles
+- User-role assignments
+- Products
+- Retailers
+- Stores
+- Source systems
+- Ingest batches
+- Price observations
+
+Price observations retain provenance, observation time, regular price, sale price, and validity dates when available.
+
+## Promotion Model - Planned
+
+The current schema stores `regular_price` and `sale_price`, but the comparison engine will need structured promotion conditions.
+
+Planned condition types:
+
+- `QUANTITY_LIMIT`
+- `MEMBER_PRICE`
+- `LOYALTY_CARD`
+- `MULTI_BUY`
+- `BOGO`
+- `MINIMUM_SPEND`
+- `APP_OFFER`
+
+`MULTI_BUY` must distinguish between:
+
+- `PRO_RATA` — e.g. 3 for $9 where one item is still $3
+- `THRESHOLD_REQUIRED` — e.g. buy 3 for $9 or pay a different single-unit price
+
+Temporary Superstore quantity-limit details are currently retained in ingest provenance until promotion tables are added.
+
+## Next Backend Milestones
+
+1. Authentication module
+2. User registration
+3. Password hashing
+4. Login
+5. JWT authentication
+6. Role handling
+7. Product and price APIs
+8. Basket management
+9. Store comparison engine
+10. Promotion-condition model
+11. Route/travel-cost calculations
+12. Stay / switch / split recommendation
+
+## Database Workflow
+
+Schema changes belong in Prisma migrations.
+
+After changing `schema.prisma`:
+
+```bash
+npx prisma migrate dev --name <migration_name>
+npx prisma generate
+```
+
+Commit both:
+
+```text
+prisma/schema.prisma
+prisma/migrations/
+```
+
+## Security
+
+Never commit:
+
+- `.env`
+- passwords
+- private database connection strings
+- API keys
+- private keys
+- production secrets
