@@ -4,6 +4,8 @@ import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import type { Request } from 'express';
+import { Roles } from './decorators/roles.decorator.js';
+import { RolesGuard } from './guards/roles.guard.js';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -36,6 +38,15 @@ export class AuthController {
     return {
       message: 'JWT authentication successful',
       user: req.user,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin-test')
+  adminTest() {
+    return {
+      message: 'ADMIN authorization successful',
     };
   }
 }
