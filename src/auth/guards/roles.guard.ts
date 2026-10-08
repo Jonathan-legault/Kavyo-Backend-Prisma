@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-
+import type { AuthenticatedRequest } from '../types/authenticated-request.type.js';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
 
 @Injectable()
@@ -22,7 +22,8 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request =
+      context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
 
     if (!user) {

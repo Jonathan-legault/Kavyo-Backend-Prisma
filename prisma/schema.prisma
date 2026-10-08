@@ -24,7 +24,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   roles UserRole[]
-
+  preference UserPreference?
   @@map("users")
 }
 
@@ -105,6 +105,7 @@ model Store {
 
   isActive          Boolean            @default(true) @map("is_active")
   priceObservations PriceObservation[]
+  userPreferences UserPreference[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -192,4 +193,20 @@ model PriceObservation {
   @@index([observedAt])
   @@index([productId, storeId, observedAt])
   @@map("price_observations")
+}
+
+model UserPreference {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @map("user_id") @db.Uuid
+  usualStoreId          String?  @map("usual_store_id") @db.Uuid
+  maxTravelDistanceKm   Decimal? @map("max_travel_distance_km") @db.Decimal(6, 2)
+  maxExtraTravelMinutes Int?     @map("max_extra_travel_minutes")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usualStore Store? @relation(fields: [usualStoreId], references: [id], onDelete: SetNull)
+
+  @@index([usualStoreId])
+  @@map("user_preferences")
 }
