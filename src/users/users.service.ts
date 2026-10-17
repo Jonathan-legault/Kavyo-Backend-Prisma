@@ -89,47 +89,53 @@ export class UsersService {
   }
 
   async updatePreferences(
-    userId: string,
-    updatePreferencesDto: UpdatePreferencesDto,
-  ) {
-    if (updatePreferencesDto.usualStoreId) {
-      const store = await this.prisma.store.findUnique({
-        where: {
-          id: updatePreferencesDto.usualStoreId,
-        },
-      });
-
-      if (!store) {
-        throw new NotFoundException('Store not found');
-      }
-    }
-
-    return this.prisma.userPreference.upsert({
+  userId: string,
+  updatePreferencesDto: UpdatePreferencesDto,
+) {
+  if (updatePreferencesDto.usualStoreId) {
+    const store = await this.prisma.store.findUnique({
       where: {
-        userId,
-      },
-      update: {
-        usualStoreId: updatePreferencesDto.usualStoreId,
-        maxTravelDistanceKm:
-          updatePreferencesDto.maxTravelDistanceKm,
-        maxExtraTravelMinutes:
-          updatePreferencesDto.maxExtraTravelMinutes,
-      },
-      create: {
-        userId,
-        usualStoreId: updatePreferencesDto.usualStoreId,
-        maxTravelDistanceKm:
-          updatePreferencesDto.maxTravelDistanceKm,
-        maxExtraTravelMinutes:
-          updatePreferencesDto.maxExtraTravelMinutes,
-      },
-      include: {
-        usualStore: {
-          include: {
-            retailer: true,
-          },
-        },
+        id: updatePreferencesDto.usualStoreId,
       },
     });
+
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
   }
+
+  return this.prisma.userPreference.upsert({
+    where: {
+      userId,
+    },
+    update: {
+      usualStoreId: updatePreferencesDto.usualStoreId,
+      postalCode: updatePreferencesDto.postalCode,
+      householdSize: updatePreferencesDto.householdSize,
+      transportMode: updatePreferencesDto.transportMode,
+      maxTravelDistanceKm:
+        updatePreferencesDto.maxTravelDistanceKm,
+      maxExtraTravelMinutes:
+        updatePreferencesDto.maxExtraTravelMinutes,
+    },
+    create: {
+      userId,
+      usualStoreId: updatePreferencesDto.usualStoreId,
+      postalCode: updatePreferencesDto.postalCode,
+      householdSize: updatePreferencesDto.householdSize,
+      transportMode: updatePreferencesDto.transportMode,
+      maxTravelDistanceKm:
+        updatePreferencesDto.maxTravelDistanceKm,
+      maxExtraTravelMinutes:
+        updatePreferencesDto.maxExtraTravelMinutes,
+    },
+    include: {
+      usualStore: {
+        include: {
+          retailer: true,
+        },
+      },
+    },
+  });
+}
 }

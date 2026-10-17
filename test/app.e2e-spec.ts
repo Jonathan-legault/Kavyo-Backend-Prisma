@@ -200,6 +200,52 @@ describe('Authentication (e2e)', () => {
     expect(response.body.maxExtraTravelMinutes).toBe(10);
   });
 
+  it('PATCH /users/me/preferences should save onboarding preferences', async () => {
+  const loginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: testEmail,
+      password: testPassword,
+    })
+    .expect(200);
+
+  const token = loginResponse.body.accessToken;
+
+  const response = await request(app.getHttpServer())
+    .patch('/users/me/preferences')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      postalCode: 'T2X 1V4',
+      householdSize: 2,
+      transportMode: 'DRIVING',
+    })
+    .expect(200);
+
+  expect(response.body.postalCode).toBe('T2X 1V4');
+  expect(response.body.householdSize).toBe(2);
+  expect(response.body.transportMode).toBe('DRIVING');
+});
+
+it('PATCH /users/me/preferences should reject an invalid transport mode', async () => {
+  const loginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: testEmail,
+      password: testPassword,
+    })
+    .expect(200);
+
+  const token = loginResponse.body.accessToken;
+
+  await request(app.getHttpServer())
+    .patch('/users/me/preferences')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      transportMode: 'FLYING',
+    })
+    .expect(400);
+});
+
   it('PATCH /users/me/preferences should reject a missing store', async () => {
     const loginResponse = await request(app.getHttpServer())
       .post('/auth/login')
@@ -297,4 +343,6 @@ describe('Authentication (e2e)', () => {
       'ADMIN authorization successful',
     );
   });
+
+
 });
