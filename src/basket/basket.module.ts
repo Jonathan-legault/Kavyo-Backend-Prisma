@@ -9,4 +9,3 @@ import { PrismaModule } from "../prisma/prisma.module.js";
   providers: [BasketService],
 })
 export class BasketModule {}
-
