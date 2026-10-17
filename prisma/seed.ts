@@ -22,6 +22,11 @@ async function main() {
       name: "ADMIN",
       description: "Administrative access to Kavyo",
     },
+
+    {
+      name: "SUPER_ADMIN",
+       description: "Privileged Kavyo administrator with role management access",
+    },
   ];
 
   for (const role of roles) {
@@ -176,6 +181,8 @@ async function main() {
       });
     }
   }
+
+
 
   console.log("Kavyo seed completed successfully.");
 }
