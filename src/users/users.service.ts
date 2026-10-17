@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 
@@ -89,53 +96,112 @@ export class UsersService {
   }
 
   async updatePreferences(
-  userId: string,
-  updatePreferencesDto: UpdatePreferencesDto,
-) {
-  if (updatePreferencesDto.usualStoreId) {
-    const store = await this.prisma.store.findUnique({
+    userId: string,
+    updatePreferencesDto: UpdatePreferencesDto,
+  ) {
+    if (updatePreferencesDto.usualStoreId) {
+      const store = await this.prisma.store.findUnique({
+        where: {
+          id: updatePreferencesDto.usualStoreId,
+        },
+      });
+
+      if (!store) {
+        throw new NotFoundException('Store not found');
+      }
+    }
+
+    return this.prisma.userPreference.upsert({
       where: {
-        id: updatePreferencesDto.usualStoreId,
+        userId,
+      },
+      update: {
+        usualStoreId: updatePreferencesDto.usualStoreId,
+        postalCode: updatePreferencesDto.postalCode,
+        householdSize: updatePreferencesDto.householdSize,
+        transportMode: updatePreferencesDto.transportMode,
+        maxTravelDistanceKm:
+          updatePreferencesDto.maxTravelDistanceKm,
+        maxExtraTravelMinutes:
+          updatePreferencesDto.maxExtraTravelMinutes,
+      },
+      create: {
+        userId,
+        usualStoreId: updatePreferencesDto.usualStoreId,
+        postalCode: updatePreferencesDto.postalCode,
+        householdSize: updatePreferencesDto.householdSize,
+        transportMode: updatePreferencesDto.transportMode,
+        maxTravelDistanceKm:
+          updatePreferencesDto.maxTravelDistanceKm,
+        maxExtraTravelMinutes:
+          updatePreferencesDto.maxExtraTravelMinutes,
+      },
+      include: {
+        usualStore: {
+          include: {
+            retailer: true,
+          },
+        },
+      },
+    });
+  }
+
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        passwordHash: true,
       },
     });
 
-    if (!store) {
-      throw new NotFoundException('Store not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
-  }
 
-  return this.prisma.userPreference.upsert({
-    where: {
-      userId,
-    },
-    update: {
-      usualStoreId: updatePreferencesDto.usualStoreId,
-      postalCode: updatePreferencesDto.postalCode,
-      householdSize: updatePreferencesDto.householdSize,
-      transportMode: updatePreferencesDto.transportMode,
-      maxTravelDistanceKm:
-        updatePreferencesDto.maxTravelDistanceKm,
-      maxExtraTravelMinutes:
-        updatePreferencesDto.maxExtraTravelMinutes,
-    },
-    create: {
-      userId,
-      usualStoreId: updatePreferencesDto.usualStoreId,
-      postalCode: updatePreferencesDto.postalCode,
-      householdSize: updatePreferencesDto.householdSize,
-      transportMode: updatePreferencesDto.transportMode,
-      maxTravelDistanceKm:
-        updatePreferencesDto.maxTravelDistanceKm,
-      maxExtraTravelMinutes:
-        updatePreferencesDto.maxExtraTravelMinutes,
-    },
-    include: {
-      usualStore: {
-        include: {
-          retailer: true,
-        },
+    const currentPasswordMatches = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException(
+        'Current password is incorrect',
+      );
+    }
+
+    const newPasswordMatchesCurrent = await bcrypt.compare(
+      changePasswordDto.newPassword,
+      user.passwordHash,
+    );
+
+    if (newPasswordMatchesCurrent) {
+      throw new BadRequestException(
+        'New password must be different from current password',
+      );
+    }
+
+    const newPasswordHash = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      12,
+    );
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
       },
-    },
-  });
-}
+      data: {
+        passwordHash: newPasswordHash,
+      },
+    });
+
+    return {
+      message: 'Password updated successfully',
+    };
+  }
 }

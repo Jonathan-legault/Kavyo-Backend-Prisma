@@ -12,6 +12,9 @@ describe('Authentication (e2e)', () => {
   const testEmail = `e2e-${Date.now()}@kavyo.ca`;
   const adminEmail = `e2e-admin-${Date.now()}@kavyo.ca`;
   const testPassword = 'TestPassword123';
+  const passwordEmail = `e2e-password-${Date.now()}@kavyo.ca`;
+  const currentPassword = 'CurrentPassword123';
+  const newPassword = 'NewPassword456';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,7 +40,7 @@ describe('Authentication (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: [testEmail, adminEmail],
+          in: [testEmail, adminEmail, passwordEmail],
         },
       },
     });
@@ -400,6 +403,119 @@ it('PATCH /users/me/preferences should reject an invalid transport mode', async 
       'ADMIN authorization successful',
     );
   });
+
+  it('PATCH /users/me/password should require authentication', async () => {
+  await request(app.getHttpServer())
+    .patch('/users/me/password')
+    .send({
+      currentPassword,
+      newPassword,
+    })
+    .expect(401);
+});
+
+it('PATCH /users/me/password should reject an incorrect current password', async () => {
+  await request(app.getHttpServer())
+    .post('/auth/register')
+    .send({
+      email: passwordEmail,
+      password: currentPassword,
+      firstName: 'Password',
+      lastName: 'Test',
+    })
+    .expect(201);
+
+  const loginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: passwordEmail,
+      password: currentPassword,
+    })
+    .expect(200);
+
+  const token = loginResponse.body.accessToken;
+
+  const response = await request(app.getHttpServer())
+    .patch('/users/me/password')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      currentPassword: 'WrongPassword123',
+      newPassword,
+    })
+    .expect(401);
+
+  expect(response.body.message).toBe(
+    'Current password is incorrect',
+  );
+});
+
+it('PATCH /users/me/password should reject reuse of the current password', async () => {
+  const loginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: passwordEmail,
+      password: currentPassword,
+    })
+    .expect(200);
+
+  const token = loginResponse.body.accessToken;
+
+  const response = await request(app.getHttpServer())
+    .patch('/users/me/password')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      currentPassword,
+      newPassword: currentPassword,
+    })
+    .expect(400);
+
+  expect(response.body.message).toBe(
+    'New password must be different from current password',
+  );
+});
+
+it('PATCH /users/me/password should change the password', async () => {
+  const loginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: passwordEmail,
+      password: currentPassword,
+    })
+    .expect(200);
+
+  const token = loginResponse.body.accessToken;
+
+  const response = await request(app.getHttpServer())
+    .patch('/users/me/password')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      currentPassword,
+      newPassword,
+    })
+    .expect(200);
+
+  expect(response.body.message).toBe(
+    'Password updated successfully',
+  );
+
+  await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: passwordEmail,
+      password: currentPassword,
+    })
+    .expect(401);
+
+  const newLoginResponse = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({
+      email: passwordEmail,
+      password: newPassword,
+    })
+    .expect(200);
+
+  expect(newLoginResponse.body.accessToken).toBeDefined();
+});
 
 
 });
