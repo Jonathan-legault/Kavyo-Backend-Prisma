@@ -11,7 +11,7 @@ The goal is to help users determine whether they should:
 - make a second stop
 - split a grocery basket between stores
 
-Recommendations will eventually consider grocery prices, promotions, travel distance, travel time, and user preferences.
+Recommendations currently combine grocery prices with an estimated driving cost. Future iterations will add promotions, travel time, transit/walking modes, and multi-store split recommendations.
 
 ---
 
@@ -35,12 +35,18 @@ The backend currently includes:
 - authenticated user profile GET/PATCH
 - user preference GET/PATCH
 - usual-store preference relationship
+- persisted basket CRUD
+- anonymous baskets with optional user ownership in the schema
+- Calgary postal-code lookup by FSA centroid
+- basket price comparison with sale/regular price handling
+- travel-cost estimation and cheapest-store recommendation
 - DTO validation
 - authentication and authorization error handling
-- 13 passing end-to-end tests using Vitest and Supertest
+- 27 unit tests using Vitest
+- 28 end-to-end tests using Vitest and Supertest
 - Postman requests for authentication and user API testing
 
-Basket comparison and recommendation logic are still under development.
+Basket comparison and travel-aware recommendations are implemented for a single store. Split-basket and multi-stop optimization remain future work.
 
 A larger local Open Food Facts development dataset containing approximately 62,575 products is also used during development.
 
@@ -93,6 +99,20 @@ kavyo-backend/
 │   │   ├── users.module.ts
 │   │   └── users.service.ts
 │   │
+│   ├── basket/
+│   │   ├── calculation/
+│   │   │   ├── postal-code.service.ts
+│   │   │   ├── postal-codes.ts
+│   │   │   ├── pricing.ts
+│   │   │   └── travel.ts
+│   │   ├── dto/
+│   │   ├── basket.controller.ts
+│   │   ├── basket.module.ts
+│   │   ├── basket.service.ts
+│   │   ├── baskets.controller.ts
+│   │   ├── baskets.service.ts
+│   │   └── comparison.service.ts
+│   │
 │   ├── prisma/
 │   │   ├── prisma.module.ts
 │   │   └── prisma.service.ts
@@ -104,7 +124,8 @@ kavyo-backend/
 │   └── main.ts
 │
 ├── test/
-│   └── app.e2e-spec.ts
+│   ├── app.e2e-spec.ts
+│   └── basket.e2e-spec.ts
 │
 ├── .env.example
 ├── .gitignore
@@ -263,7 +284,7 @@ The fixture contains:
 
 - 5 grocery products
 - 3 retailers
-- 3 stores
+- 3 stores with Calgary coordinates
 - 15 verified price observations
 - associated source and ingest data
 
@@ -407,6 +428,189 @@ The future recommendation engine may still recommend a store outside the user's 
 
 ---
 
+## Basket Comparison and Recommendation
+
+The basket flow is available in both a persisted form and a stateless quick-compare form.
+
+### Persisted basket endpoints
+
+```text
+POST   /baskets
+GET    /baskets/:id
+PATCH  /baskets/:id
+POST   /baskets/:id/items
+PATCH  /baskets/:id/items/:itemId
+DELETE /baskets/:id/items/:itemId
+POST   /baskets/:id/compare
+```
+
+Create a basket with a Calgary postal code:
+
+```http
+POST /baskets
+Content-Type: application/json
+
+{
+  "postalCode": "T3M 1T4"
+}
+```
+
+The postal code is normalized to `T3M1T4`. A three-character FSA such as `T3M` is also accepted. Unsupported postal codes are rejected with `400 Bad Request`.
+
+Add a product:
+
+```http
+POST /baskets/<basket-id>/items
+Content-Type: application/json
+
+{
+  "productId": "63ddbba5-e68b-4c09-9fa8-321b8bb0531c",
+  "quantity": 2
+}
+```
+
+Compare the basket:
+
+```http
+POST /baskets/<basket-id>/compare
+Content-Type: application/json
+
+{}
+```
+
+The stored basket postal code is used when the compare request omits `postalCode`. A compare request may override it:
+
+```json
+{
+  "postalCode": "T2P 1J9",
+  "travelCostPerKm": 0.35,
+  "roundTrip": true,
+  "roadDistanceFactor": 1.3,
+  "baselineStoreId": "<optional-store-id>"
+}
+```
+
+Compare options:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `postalCode` | Basket value | Calgary postal code or FSA. Required for a persisted comparison when the basket has none. |
+| `travelCostPerKm` | `0.35` | Driving cost in CAD per kilometre, between `0` and `5`. |
+| `roundTrip` | `true` | Bills the return trip as well as the outbound trip. |
+| `roadDistanceFactor` | `1.3` | Approximates road distance from straight-line distance, between `1` and `2`. |
+| `baselineStoreId` | none | The user's current/usual store. Enables `STAY` and `SWITCH` recommendations. |
+
+Abbreviated response:
+
+```json
+{
+  "currency": "CAD",
+  "asOf": "2026-10-21T18:00:00.000Z",
+  "basketId": "f99a3074-52b9-4475-8821-5b9726e0e37c",
+  "postalCode": "T3M1T4",
+  "customerLocation": {
+    "postalCode": "T3M1T4",
+    "fsa": "T3M",
+    "latitude": 50.8902,
+    "longitude": -113.9892,
+    "precision": "FSA_CENTROID"
+  },
+  "travelAssumptions": {
+    "included": true,
+    "travelCostPerKm": 0.35,
+    "roundTrip": true,
+    "roadDistanceFactor": 1.3,
+    "averageSpeedKmH": 35,
+    "distanceMethod": "HAVERSINE_ROAD_FACTOR",
+    "locationPrecision": "FSA_CENTROID"
+  },
+  "comparisons": [
+    {
+      "storeId": "2d08df42-04ee-4c82-bcaa-9818dfea239f",
+      "storeName": "Real Canadian Superstore Seton Way",
+      "retailerName": "Real Canadian Superstore",
+      "distanceKm": 3.45,
+      "roundTripDistanceKm": 6.89,
+      "travelCost": 2.41,
+      "productSubtotal": 33.93,
+      "estimatedTotal": 36.34,
+      "isComplete": true,
+      "missingProducts": [],
+      "hasExpiredSale": false,
+      "hasStalePrice": true
+    }
+  ],
+  "cheapestCompleteStore": {
+    "storeId": "2d08df42-04ee-4c82-bcaa-9818dfea239f",
+    "storeName": "Real Canadian Superstore Seton Way",
+    "productSubtotal": 33.93,
+    "travelCost": 2.41,
+    "estimatedTotal": 36.34
+  },
+  "closestPartialStore": null,
+  "recommendation": {
+    "action": "GO_TO_STORE",
+    "storeId": "2d08df42-04ee-4c82-bcaa-9818dfea239f",
+    "storeName": "Real Canadian Superstore Seton Way",
+    "productSubtotal": 33.93,
+    "travelCost": 2.41,
+    "estimatedTotal": 36.34,
+    "savingsVsNextCheapest": 6.96,
+    "savingsVsBaseline": null,
+    "message": "Go to Real Canadian Superstore Seton Way. The estimated total is $36.34 total ($33.93 groceries + $2.41 round-trip travel for 6.9 km). This is $6.96 cheaper than the next complete store (Sobeys Mahogany)."
+  },
+  "warnings": [
+    "Travel distance is estimated from the postal-code area (FSA) centroid and a road-distance factor; actual driving distance may differ.",
+    "Some prices are more than 24 hours old. Confirm them before travelling."
+  ]
+}
+```
+
+Recommendation actions:
+
+- `GO_TO_STORE` — the cheapest complete store is recommended.
+- `STAY` — the supplied `baselineStoreId` is already the cheapest complete store.
+- `SWITCH` — another store is cheaper than the supplied baseline.
+- `NO_COMPLETE_STORE` — no complete store is eligible because products are missing or a travel estimate is unavailable. The response lists missing products and/or the affected stores.
+
+### Stateless quick comparison
+
+The original endpoint remains available:
+
+```http
+POST /basket/compare
+Content-Type: application/json
+
+{
+  "postalCode": "T3M 1T4",
+  "items": [
+    {
+      "productId": "63ddbba5-e68b-4c09-9fa8-321b8bb0531c",
+      "quantity": 2
+    }
+  ]
+}
+```
+
+This returns the same comparison shape with `"basketId": null`. If `postalCode` is omitted, prices are compared without travel cost and the response includes a warning.
+
+### Pricing and travel rules
+
+- The latest price observation per store and product is used.
+- An active sale price is used when the current time is inside its `validFrom`/`validUntil` window.
+- An expired or not-yet-started sale falls back to the regular price. Expired sales produce a warning.
+- A store missing any requested product is incomplete and is never recommended as the cheapest store. Missing products are listed explicitly.
+- Prices older than 24 hours are flagged with a warning.
+- Travel distance is estimated from the customer's FSA centroid to the store's recorded latitude/longitude using the Haversine formula.
+- Driving distance is approximated as straight-line distance × `roadDistanceFactor`, then doubled for a round trip.
+- Travel cost is driving distance × `travelCostPerKm`. The defaults are `0.35 CAD/km`, a `1.3` road factor, and a round trip.
+- The estimate does not include live traffic, parking, transit fares, walking/cycling time, or vehicle ownership costs. Use it as a prototype-level decision aid, not a precise trip quote.
+- Calgary FSA centroids are stored locally in `src/basket/calculation/postal-codes.ts`; no external geocoding service is called at runtime.
+
+Baskets are currently anonymous by default. The schema retains an optional `user_id` so existing user-owned baskets remain valid and authenticated ownership can be added later. Basket routes are not currently protected by JWT authorization.
+
+---
+
 ## Automated Testing
 
 End-to-end tests use:
@@ -424,8 +628,11 @@ npm run test:e2e
 Current result:
 
 ```text
-13 tests passing
+27 unit tests passing
+28 end-to-end tests passing
 ```
+
+Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, and numeric parsing.
 
 The current E2E suite verifies:
 
@@ -443,8 +650,15 @@ The current E2E suite verifies:
 - invalid store handling
 - USER rejection from ADMIN routes
 - ADMIN authorization
+- basket creation and item management
+- persisted basket comparison with travel cost
+- expired-sale fallback to regular prices
+- baseline-store `STAY`/`SWITCH` recommendation behavior
+- stateless `POST /basket/compare`
+- postal-code validation
+- rejection of a persisted comparison without a postal code
 
-Test accounts created during the E2E suite are removed after testing.
+Test accounts and baskets created during the E2E suite are removed after testing.
 
 ---
 
@@ -554,17 +768,25 @@ Promotion-condition support is planned for a later backend milestone.
 - usual-store relationship
 - request validation
 - authentication and authorization error handling
+- persisted basket CRUD
+- basket price comparison
+- effective sale-price selection with expiry fallback
+- FSA-centroid postal-code lookup
+- Haversine travel-distance and driving-cost estimation
+- cheapest complete-store recommendation
+- `STAY` / `SWITCH` baseline-store comparison
 - automated authentication/user E2E tests
+- automated basket comparison E2E tests
 - Postman authentication/user testing
 
 ### Next Backend Milestones
 
 1. Product and price APIs
-2. Basket management
-3. Store comparison engine
-4. Promotion-condition model
-5. Route and travel-cost calculations
-6. Stay / switch / split recommendation
+2. Promotion-condition model
+3. Transit, walking, and cycling travel modes
+4. Route-aware travel time and multi-stop optimization
+5. Split-basket recommendation
+6. Authenticated basket ownership and authorization
 7. Administrative APIs and analytics
 
 ---
@@ -675,6 +897,9 @@ npx prisma db seed
 - `maxTravelDistanceKm` currently serializes as a JSON string because it is stored as a PostgreSQL `DECIMAL`.
 - API timestamps use UTC ISO 8601 format.
 - Travel preference values are soft preferences rather than hard recommendation filters.
+- Basket recommendations use current store coordinates and locally stored FSA centroids; they do not call a live geocoder.
+- Travel cost is an estimate based on distance only. It excludes traffic, parking, transit fares, and vehicle ownership costs.
+- Prices older than 24 hours are reported as stale but are still used with a warning.
 - `/db-check` is a temporary development endpoint.
 - `/auth/admin-test` is a temporary authorization endpoint.
-- Basket comparison and recommendation functionality are still under development.
+- Basket routes are currently unauthenticated prototype endpoints.

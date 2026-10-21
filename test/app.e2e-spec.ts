@@ -5,6 +5,10 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
+// Keep the auth suite self-contained when a developer has not added a local
+// JWT secret yet. A real .env value still takes precedence.
+process.env.JWT_SECRET ??= 'kavyo-e2e-test-secret';
+
 describe('Authentication (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
