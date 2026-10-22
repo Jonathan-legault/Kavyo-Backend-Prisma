@@ -1,0 +1,25 @@
+{
+  "_notice": "SYNTHETIC TEST FIXTURE — not a live flyer or verified retail prices",
+  "source": "KAVYO_SYNTHETIC_FIXTURE",
+  "postal_code": "T2M 1N7",
+  "retrieved_at": "2026-10-22T16:00:00.000Z",
+  "items": [
+    {
+      "id": "fixture-001",
+      "retailer": "Example Calgary Grocery",
+      "name": "Example 2% Milk",
+      "size": "2 L",
+      "regular_price": 5.49,
+      "price": 4.99,
+      "valid_from": "2026-10-22T00:00:00.000Z",
+      "valid_until": "2026-10-29T00:00:00.000Z"
+    },
+    {
+      "id": "fixture-002",
+      "retailer": "Example Calgary Grocery",
+      "name": "Example Apples",
+      "size": "3 lb bag",
+      "price": 3.99
+    }
+  ]
+}
