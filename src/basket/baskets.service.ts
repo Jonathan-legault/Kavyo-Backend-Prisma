@@ -39,13 +39,14 @@ export class BasketsService {
     private readonly postalCodeService: PostalCodeService,
   ) {}
 
-  async create(dto: CreateBasketDto) {
+  async create(userId: string, dto: CreateBasketDto) {
     const postalCode = dto.postalCode
       ? this.postalCodeService.locate(dto.postalCode).postalCode
       : null;
 
     const basket = await this.prisma.basket.create({
       data: {
+        userId,
         status: "active",
         postalCode,
       },
@@ -55,9 +56,12 @@ export class BasketsService {
     return this.toBasketResponse(basket);
   }
 
-  async findOne(basketId: string) {
-    const basket = await this.prisma.basket.findUnique({
-      where: { id: basketId },
+  async findOne(userId: string, basketId: string) {
+    const basket = await this.prisma.basket.findFirst({
+      where: {
+        id: basketId,
+        userId,
+      },
       include: basketInclude,
     });
 
@@ -68,8 +72,12 @@ export class BasketsService {
     return this.toBasketResponse(basket);
   }
 
-  async update(basketId: string, dto: UpdateBasketDto) {
-    await this.assertActiveBasket(basketId);
+  async update(
+    userId: string,
+    basketId: string,
+    dto: UpdateBasketDto,
+  ) {
+    await this.assertActiveBasket(userId, basketId);
 
     const postalCode = dto.postalCode
       ? this.postalCodeService.locate(dto.postalCode).postalCode
@@ -80,11 +88,15 @@ export class BasketsService {
       data: postalCode !== undefined ? { postalCode } : {},
     });
 
-    return this.findOne(basketId);
+    return this.findOne(userId, basketId);
   }
 
-  async addItem(basketId: string, dto: AddBasketItemDto) {
-    await this.assertActiveBasket(basketId);
+  async addItem(
+    userId: string,
+    basketId: string,
+    dto: AddBasketItemDto,
+  ) {
+    await this.assertActiveBasket(userId, basketId);
 
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -115,15 +127,16 @@ export class BasketsService {
       throw error;
     }
 
-    return this.findOne(basketId);
+    return this.findOne(userId, basketId);
   }
 
   async updateItem(
+    userId: string,
     basketId: string,
     itemId: string,
     dto: UpdateBasketItemDto,
   ) {
-    await this.assertActiveBasket(basketId);
+    await this.assertActiveBasket(userId, basketId);
 
     const item = await this.prisma.basketItem.findFirst({
       where: {
@@ -142,11 +155,15 @@ export class BasketsService {
       data: { quantity: dto.quantity },
     });
 
-    return this.findOne(basketId);
+    return this.findOne(userId, basketId);
   }
 
-  async removeItem(basketId: string, itemId: string) {
-    await this.assertActiveBasket(basketId);
+  async removeItem(
+    userId: string,
+    basketId: string,
+    itemId: string,
+  ) {
+    await this.assertActiveBasket(userId, basketId);
 
     const result = await this.prisma.basketItem.deleteMany({
       where: {
@@ -160,9 +177,15 @@ export class BasketsService {
     }
   }
 
-  private async assertActiveBasket(basketId: string) {
-    const basket = await this.prisma.basket.findUnique({
-      where: { id: basketId },
+  private async assertActiveBasket(
+    userId: string,
+    basketId: string,
+  ) {
+    const basket = await this.prisma.basket.findFirst({
+      where: {
+        id: basketId,
+        userId,
+      },
       select: { id: true, status: true },
     });
 

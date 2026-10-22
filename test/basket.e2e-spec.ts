@@ -5,6 +5,8 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
+process.env.JWT_SECRET ??= 'kavyo-basket-e2e-secret';
+
 const PRODUCT_IDS = [
   '63ddbba5-e68b-4c09-9fa8-321b8bb0531c',
   '9b465a81-10bd-4976-8104-5ca45ee1f405',
@@ -13,10 +15,17 @@ const PRODUCT_IDS = [
   '5d9baa7c-9c37-4182-96d6-0f16881672ad',
 ];
 
+const TEST_PASSWORD = 'TestPassword123';
+
 describe('Basket comparison (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let basketId: string;
+  let accessToken: string;
+  let userId: string;
+
+  const testEmail = `e2e-basket-${Date.now()}@kavyo.ca`;
+  const otherEmail = `e2e-basket-other-${Date.now()}@kavyo.ca`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,8 +46,31 @@ describe('Basket comparison (e2e)', () => {
 
     await app.init();
 
+    const registerResponse = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        email: testEmail,
+        password: TEST_PASSWORD,
+        firstName: 'Basket',
+        lastName: 'Owner',
+      })
+      .expect(201);
+
+    userId = registerResponse.body.id;
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: testEmail,
+        password: TEST_PASSWORD,
+      })
+      .expect(200);
+
+    accessToken = loginResponse.body.accessToken;
+
     const basketResponse = await request(app.getHttpServer())
       .post('/baskets')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ postalCode: 'T3M 1T4' })
       .expect(201);
 
@@ -47,32 +79,59 @@ describe('Basket comparison (e2e)', () => {
     for (const productId of PRODUCT_IDS) {
       await request(app.getHttpServer())
         .post(`/baskets/${basketId}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
         .send({ productId, quantity: 1 })
         .expect(201);
     }
   });
 
   afterAll(async () => {
-    if (basketId) {
-      await prisma.basket.deleteMany({ where: { id: basketId } });
-    }
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          in: [testEmail, otherEmail],
+        },
+      },
+    });
 
     await app.close();
   });
 
-  it('creates an anonymous basket and stores a normalized postal code', async () => {
+  it('rejects basket creation without authentication', async () => {
+    await request(app.getHttpServer())
+      .post('/baskets')
+      .send({ postalCode: 'T3M 1T4' })
+      .expect(401);
+  });
+
+  it('rejects reading a basket without authentication', async () => {
+    await request(app.getHttpServer())
+      .get(`/baskets/${basketId}`)
+      .expect(401);
+  });
+
+  it('creates a user-owned basket and stores a normalized postal code', async () => {
     const response = await request(app.getHttpServer())
       .get(`/baskets/${basketId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
     expect(response.body.postalCode).toBe('T3M1T4');
     expect(response.body.itemCount).toBe(PRODUCT_IDS.length);
     expect(response.body.items).toHaveLength(PRODUCT_IDS.length);
+
+    const storedBasket = await prisma.basket.findUnique({
+      where: { id: basketId },
+      select: { userId: true },
+    });
+
+    expect(storedBasket?.userId).toBe(userId);
   });
 
   it('compares a persisted basket with travel cost included', async () => {
     const response = await request(app.getHttpServer())
       .post(`/baskets/${basketId}/compare`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(201);
 
@@ -109,6 +168,7 @@ describe('Basket comparison (e2e)', () => {
   it('uses regular prices after a sale expires', async () => {
     const response = await request(app.getHttpServer())
       .post(`/baskets/${basketId}/compare`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(201);
 
@@ -135,6 +195,7 @@ describe('Basket comparison (e2e)', () => {
   it('recommends switching when the baseline store is not cheapest', async () => {
     const initial = await request(app.getHttpServer())
       .post(`/baskets/${basketId}/compare`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(201);
 
@@ -146,6 +207,7 @@ describe('Basket comparison (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post(`/baskets/${basketId}/compare`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ baselineStoreId: baseline.storeId })
       .expect(201);
 
@@ -156,7 +218,7 @@ describe('Basket comparison (e2e)', () => {
     expect(response.body.recommendation.savingsVsBaseline).toBeGreaterThan(0);
   });
 
-  it('keeps the stateless compare endpoint working', async () => {
+  it('keeps the stateless compare endpoint public', async () => {
     const response = await request(app.getHttpServer())
       .post('/basket/compare')
       .send({
@@ -179,11 +241,13 @@ describe('Basket comparison (e2e)', () => {
   it('rejects an unsupported or malformed postal code', async () => {
     await request(app.getHttpServer())
       .post('/baskets')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ postalCode: 'T4A 0A1' })
       .expect(400);
 
     await request(app.getHttpServer())
       .post('/baskets')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ postalCode: 'not-a-postal-code' })
       .expect(400);
   });
@@ -191,19 +255,61 @@ describe('Basket comparison (e2e)', () => {
   it('requires a postal code for a persisted comparison', async () => {
     const basketResponse = await request(app.getHttpServer())
       .post('/baskets')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(201);
 
     await request(app.getHttpServer())
       .post(`/baskets/${basketResponse.body.id}/items`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ productId: PRODUCT_IDS[0], quantity: 1 })
       .expect(201);
 
     await request(app.getHttpServer())
       .post(`/baskets/${basketResponse.body.id}/compare`)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(400);
 
     await prisma.basket.delete({ where: { id: basketResponse.body.id } });
+  });
+
+  it("does not expose another user's basket", async () => {
+    await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        email: otherEmail,
+        password: TEST_PASSWORD,
+        firstName: 'Other',
+        lastName: 'User',
+      })
+      .expect(201);
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: otherEmail,
+        password: TEST_PASSWORD,
+      })
+      .expect(200);
+
+    const otherToken = loginResponse.body.accessToken;
+
+    await request(app.getHttpServer())
+      .get(`/baskets/${basketId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404);
+
+    await request(app.getHttpServer())
+      .post(`/baskets/${basketId}/items`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ productId: PRODUCT_IDS[0], quantity: 1 })
+      .expect(404);
+
+    await request(app.getHttpServer())
+      .post(`/baskets/${basketId}/compare`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({})
+      .expect(404);
   });
 });

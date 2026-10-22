@@ -36,15 +36,16 @@ The backend currently includes:
 - user preference GET/PATCH
 - usual-store preference relationship
 - persisted basket CRUD
-- anonymous baskets with optional user ownership in the schema
+- authenticated, user-owned baskets
+- guest quick comparison without persistence
 - Calgary postal-code lookup by FSA centroid
 - basket price comparison with sale/regular price handling
 - travel-cost estimation and cheapest-store recommendation
 - DTO validation
 - authentication and authorization error handling
 - 27 unit tests using Vitest
-- 28 end-to-end tests using Vitest and Supertest
-- Postman requests for authentication and user API testing
+- 31 end-to-end tests using Vitest and Supertest
+- Postman requests for authentication, user, and basket API testing
 
 Basket comparison and travel-aware recommendations are implemented for a single store. Split-basket and multi-stop optimization remain future work.
 
@@ -106,11 +107,11 @@ kavyo-backend/
 │   │   │   ├── pricing.ts
 │   │   │   └── travel.ts
 │   │   ├── dto/
-│   │   ├── basket.controller.ts
 │   │   ├── basket.module.ts
-│   │   ├── basket.service.ts
 │   │   ├── baskets.controller.ts
 │   │   ├── baskets.service.ts
+│   │   ├── quick-compare.controller.ts
+│   │   ├── quick-compare.service.ts
 │   │   └── comparison.service.ts
 │   │
 │   ├── prisma/
@@ -391,8 +392,8 @@ Authorization: Bearer <JWT>
 
 Current access model:
 
-- Guest — unauthenticated; no database role
-- USER — authenticated standard user
+- Guest — unauthenticated; guest basket state is frontend-only; can use the public stateless compare endpoint
+- USER — authenticated standard user; can create and manage their own persisted baskets
 - ADMIN — authenticated administrator
 
 A registered account receives the `USER` role automatically.
@@ -432,7 +433,15 @@ The future recommendation engine may still recommend a store outside the user's 
 
 The basket flow is available in both a persisted form and a stateless quick-compare form.
 
+Guest baskets are handled by the frontend and are not persisted by the backend. Guests use the public `POST /basket/compare` endpoint for price and travel comparisons. Persisted baskets require authentication and belong to the authenticated user.
+
 ### Persisted basket endpoints
+
+All persisted basket routes require:
+
+```http
+Authorization: Bearer <JWT>
+```
 
 ```text
 POST   /baskets
@@ -444,10 +453,13 @@ DELETE /baskets/:id/items/:itemId
 POST   /baskets/:id/compare
 ```
 
+A user can only access baskets they own. Requests for another user's basket return `404 Not Found`.
+
 Create a basket with a Calgary postal code:
 
 ```http
 POST /baskets
+Authorization: Bearer <JWT>
 Content-Type: application/json
 
 {
@@ -461,6 +473,7 @@ Add a product:
 
 ```http
 POST /baskets/<basket-id>/items
+Authorization: Bearer <JWT>
 Content-Type: application/json
 
 {
@@ -473,6 +486,7 @@ Compare the basket:
 
 ```http
 POST /baskets/<basket-id>/compare
+Authorization: Bearer <JWT>
 Content-Type: application/json
 
 {}
@@ -607,7 +621,7 @@ This returns the same comparison shape with `"basketId": null`. If `postalCode` 
 - The estimate does not include live traffic, parking, transit fares, walking/cycling time, or vehicle ownership costs. Use it as a prototype-level decision aid, not a precise trip quote.
 - Calgary FSA centroids are stored locally in `src/basket/calculation/postal-codes.ts`; no external geocoding service is called at runtime.
 
-Baskets are currently anonymous by default. The schema retains an optional `user_id` so existing user-owned baskets remain valid and authenticated ownership can be added later. Basket routes are not currently protected by JWT authorization.
+Persisted baskets are authenticated and owned by the user who created them. The backend does not create anonymous persistent baskets; guest basket state is kept by the frontend and can be compared through the public stateless endpoint.
 
 ---
 
@@ -629,7 +643,7 @@ Current result:
 
 ```text
 27 unit tests passing
-28 end-to-end tests passing
+31 end-to-end tests passing
 ```
 
 Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, and numeric parsing.
@@ -651,6 +665,8 @@ The current E2E suite verifies:
 - USER rejection from ADMIN routes
 - ADMIN authorization
 - basket creation and item management
+- authentication required for persisted baskets
+- basket ownership isolation between users
 - persisted basket comparison with travel cost
 - expired-sale fallback to regular prices
 - baseline-store `STAY`/`SWITCH` recommendation behavior
@@ -786,8 +802,7 @@ Promotion-condition support is planned for a later backend milestone.
 3. Transit, walking, and cycling travel modes
 4. Route-aware travel time and multi-stop optimization
 5. Split-basket recommendation
-6. Authenticated basket ownership and authorization
-7. Administrative APIs and analytics
+6. Administrative APIs and analytics
 
 ---
 
@@ -902,4 +917,5 @@ npx prisma db seed
 - Prices older than 24 hours are reported as stale but are still used with a warning.
 - `/db-check` is a temporary development endpoint.
 - `/auth/admin-test` is a temporary authorization endpoint.
-- Basket routes are currently unauthenticated prototype endpoints.
+- Persisted basket routes require JWT authentication.
+- Guest basket state is managed by the frontend; the public quick-compare endpoint does not persist anything.

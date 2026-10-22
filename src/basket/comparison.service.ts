@@ -164,11 +164,15 @@ export class BasketComparisonService {
    * or supplied with the compare request.
    */
   async compareBasket(
+    userId: string,
     basketId: string,
     options: CompareOptionsDto,
   ): Promise<BasketComparisonResult> {
-    const basket = await this.prisma.basket.findUnique({
-      where: { id: basketId },
+    const basket = await this.prisma.basket.findFirst({
+      where: {
+        id: basketId,
+        userId,
+      },
       include: {
         items: {
           orderBy: { createdAt: "asc" },

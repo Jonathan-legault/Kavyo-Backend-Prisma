@@ -3,7 +3,7 @@ import { BasketComparisonService } from "./comparison.service.js";
 import { CompareBasketDto } from "./dto/compare-basket.dto.js";
 
 @Injectable()
-export class BasketService {
+export class QuickCompareService {
   constructor(
     private readonly comparisonService: BasketComparisonService,
   ) {}
