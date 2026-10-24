@@ -35,4 +35,20 @@ export interface NormalizedOffer {
   extractionMethod: 'API' | 'DOCUMENT' | 'IMAGE' | 'MANUAL';
   reviewRequired: boolean;
   reviewReasons: string[];
+
+  loyaltyProgram?: string;
+  loyaltyPoints?: number;
+  loyaltyCondition?: string;
+
+
+  advertisedPriceText?: string;
+  advertisedPriceAmount?: number;
+  advertisedPriceUnit?: string;
+
+
+  memberPrice?: number;
+  priceRestriction?: 'MEMBER_ONLY' | 'STARTING_AT';
+
+
+
 }
