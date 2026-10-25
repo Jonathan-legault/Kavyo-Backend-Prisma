@@ -30,8 +30,9 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  roles UserRole[]
+  roles      UserRole[]
   preference UserPreference?
+
   @@map("users")
 }
 
@@ -112,7 +113,7 @@ model Store {
 
   isActive          Boolean            @default(true) @map("is_active")
   priceObservations PriceObservation[]
-  userPreferences UserPreference[]
+  userPreferences   UserPreference[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -160,6 +161,7 @@ model IngestBatch {
 
   sourceSystem      SourceSystem       @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
   priceObservations PriceObservation[]
+  stagedOffers      StagedOffer[]
 
   @@index([sourceSystemId])
   @@index([status])
@@ -203,16 +205,16 @@ model PriceObservation {
 }
 
 model UserPreference {
-  id                    String         @id @default(uuid()) @db.Uuid
-  userId                String         @unique @map("user_id") @db.Uuid
-  usualStoreId          String?        @map("usual_store_id") @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
+  userId       String  @unique @map("user_id") @db.Uuid
+  usualStoreId String? @map("usual_store_id") @db.Uuid
 
-  postalCode            String?        @map("postal_code") @db.VarChar(20)
-  householdSize         Int?           @map("household_size")
-  transportMode         TransportMode? @map("transport_mode")
+  postalCode    String?        @map("postal_code") @db.VarChar(20)
+  householdSize Int?           @map("household_size")
+  transportMode TransportMode? @map("transport_mode")
 
-  maxTravelDistanceKm   Decimal?       @map("max_travel_distance_km") @db.Decimal(6, 2)
-  maxExtraTravelMinutes Int?           @map("max_extra_travel_minutes")
+  maxTravelDistanceKm   Decimal? @map("max_travel_distance_km") @db.Decimal(6, 2)
+  maxExtraTravelMinutes Int?     @map("max_extra_travel_minutes")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -223,4 +225,52 @@ model UserPreference {
   @@index([usualStoreId])
   @@index([postalCode])
   @@map("user_preferences")
+}
+
+model StagedOffer {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Ingestion batch and source identification
+  ingestBatchId   String  @map("ingest_batch_id") @db.Uuid
+  recordKey       String  @map("record_key") @db.VarChar(160)
+  sourceRecordId  String? @map("source_record_id") @db.VarChar(300)
+  sourceReference String? @map("source_reference") @db.Text
+
+  // Retailer and geographical information
+  retailerName    String  @map("retailer_name") @db.VarChar(150)
+  storeIdentifier String? @map("store_identifier") @db.VarChar(150)
+  applicability   String? @db.VarChar(200)
+
+  // Product identification
+  productName String  @map("product_name") @db.VarChar(500)
+  brand       String? @db.VarChar(500)
+
+  // Advertised pricing
+  advertisedPriceText   String?  @map("advertised_price_text") @db.Text
+  advertisedPriceAmount Decimal? @map("advertised_price_amount") @db.Decimal(12, 3)
+  advertisedPriceUnit   String?  @map("advertised_price_unit") @db.VarChar(50)
+
+  // Extraction and review
+  extractionMethod String  @map("extraction_method") @db.VarChar(30)
+  status           String  @default("PENDING_REVIEW") @db.VarChar(30)
+  reviewRequired   Boolean @default(true) @map("review_required")
+  reviewReasons    Json    @map("review_reasons") @db.JsonB
+
+  // Original and normalized information
+  normalizedPayload Json  @map("normalized_payload") @db.JsonB
+  rawPayload        Json? @map("raw_payload") @db.JsonB
+
+  // Audit timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relationship
+  ingestBatch IngestBatch @relation(fields: [ingestBatchId], references: [id], onDelete: Restrict)
+
+  // Constraints and indexes
+  @@unique([ingestBatchId, recordKey])
+  @@index([ingestBatchId, status])
+  @@index([retailerName])
+  @@index([status])
+  @@map("staged_offers")
 }

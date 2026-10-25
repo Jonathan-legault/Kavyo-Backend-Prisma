@@ -66,9 +66,47 @@ const priceClassification = {
       offer.advertisedPriceUnit === undefined &&
       offer.advertisedPriceAmount !== undefined,
   ).length,
-};
+
+  minimumPurchaseOffers: offers.filter(
+    (offer) => offer.minimumPurchaseQuantity !== undefined,
+  ).length,};
 
 console.table(priceClassification);
+
+
+console.table(priceClassification);
+
+console.log('\n=== MINIMUM PURCHASE OFFERS ===\n');
+
+console.table(
+  offers
+    .filter((offer) => offer.minimumPurchaseQuantity !== undefined)
+    .map((offer) => ({
+      productName: offer.productName,
+      advertisedPriceText: offer.advertisedPriceText,
+      minimumPurchaseQuantity: offer.minimumPurchaseQuantity,
+      salePrice: offer.salePrice,
+    })),
+);
+
+
+console.log('\n=== PRICES WITH UNKNOWN UNITS ===\n');
+
+console.table(
+  offers
+    .filter(
+      (offer) =>
+        offer.advertisedPriceAmount !== undefined &&
+        offer.advertisedPriceUnit === undefined,
+    )
+    .map((offer) => ({
+      recordId: offer.sourceRecordId,
+      product: offer.productName,
+      priceText: offer.advertisedPriceText,
+      amount: offer.advertisedPriceAmount,
+      promotion: offer.promotionText?.slice(0, 150),
+    })),
+);
 
 
 console.log('\n=== PRICE UNIT DISTRIBUTION ===\n');

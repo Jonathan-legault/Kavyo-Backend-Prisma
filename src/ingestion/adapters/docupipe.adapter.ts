@@ -76,6 +76,25 @@ export function adaptDocuPipeGrouping(
       reviewReasons.push('STARTING_PRICE_REQUIRES_REVIEW');
     }
 
+    // Detect a minimum purchase quantity attached
+    // directly to the advertised price.
+    const minimumPurchaseMatch =
+      product.advertisedPrice?.match(
+        /\b(?:when\s+you\s+)?buy\s+(\d+)\s+or\s+more\b/i,
+      );
+
+    const minimumPurchaseQuantity = minimumPurchaseMatch
+      ? Number(minimumPurchaseMatch[1])
+      : undefined;
+
+    const requiresMinimumPurchase =
+      minimumPurchaseQuantity !== undefined &&
+      minimumPurchaseQuantity >= 2;
+
+    if (requiresMinimumPurchase) {
+      reviewReasons.push('MINIMUM_QUANTITY_REQUIRED');
+    }
+
     // ----------------------------------------
     // 3. Extract Scene+ loyalty points
     // ----------------------------------------
@@ -182,7 +201,8 @@ export function adaptDocuPipeGrouping(
       salePrice:
         product.priceUnit === 'each' &&
         !isMemberOnlyPrice &&
-        !isStartingAtPrice
+        !isStartingAtPrice &&
+        !requiresMinimumPurchase
           ? product.numericPrice ?? undefined
           : undefined,
 
@@ -221,6 +241,11 @@ export function adaptDocuPipeGrouping(
       loyaltyCondition:
         loyaltyPoints !== undefined
           ? grouping.scenePointsCondition ?? undefined
+          : undefined,
+
+      minimumPurchaseQuantity:
+        requiresMinimumPurchase
+          ? minimumPurchaseQuantity
           : undefined,
 
       extractionMethod: 'DOCUMENT',

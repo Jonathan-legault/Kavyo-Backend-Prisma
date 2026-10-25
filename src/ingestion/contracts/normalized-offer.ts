@@ -48,7 +48,7 @@ export interface NormalizedOffer {
 
   memberPrice?: number;
   priceRestriction?: 'MEMBER_ONLY' | 'STARTING_AT';
-
+  minimumPurchaseQuantity?: number;
 
 
 }

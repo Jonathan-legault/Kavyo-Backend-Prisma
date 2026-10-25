@@ -340,5 +340,44 @@ it('detects member pricing in promotion conditions', () => {
 });
 
 
+it('does not treat minimum-purchase pricing as unrestricted', () => {
+  const [offer] = adaptDocuPipeGrouping(
+    {
+      offerTitle: 'Minimum quantity promotion',
+      pageNumber: 1,
+      promotionConditions: null,
+      scenePointsOffer: null,
+      scenePointsCondition: null,
+      eligibleProducts: [
+        {
+          productName: 'Example Product',
+          brand: null,
+          advertisedPrice: '$5 ea when you buy 2 or more',
+          numericPrice: 5,
+          priceUnit: 'each',
+          packageSize: null,
+          equivalentPrice: null,
+        },
+      ],
+    },
+    {
+      documentId: 'minimum-purchase-test',
+      groupIndex: 0,
+      retailerName: 'Safeway',
+      observedAt: '2026-10-24T20:00:00.000Z',
+      validFrom: '2026-10-22',
+      validUntil: '2026-10-28',
+    },
+  );
+
+  expect(offer.advertisedPriceAmount).toBe(5);
+  expect(offer.advertisedPriceUnit).toBe('each');
+  expect(offer.minimumPurchaseQuantity).toBe(2);
+  expect(offer.salePrice).toBeUndefined();
+
+  expect(offer.reviewReasons)
+    .toContain('MINIMUM_QUANTITY_REQUIRED');
+});
+
 
 });
