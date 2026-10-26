@@ -9,6 +9,12 @@ export interface NormalizedOffer {
   sourceUrl?: string;
   sourceReference?: string;
 
+  // Identifies the original advertisement shared by products.
+  promotionGroupId?: string;
+
+// Original source data, preserved without normalization.
+  rawPayload?: Record<string, unknown>;
+
   retailerName: string;
   storeIdentifier?: string;
   retrievalPostalCode?: string;

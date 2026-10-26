@@ -174,6 +174,20 @@ export function adaptDocuPipeGrouping(
     return {
       sourceSystem: 'DOCUPIPE',
 
+      // Shared identifier for every product in this advertisement.
+      promotionGroupId:
+        `${context.documentId}:p${grouping.pageNumber}` +
+        `:g${context.groupIndex + 1}`,
+
+      // Preserve the original advertisement and all eligible products.
+      rawPayload: {
+        documentId: context.documentId,
+        pageNumber: grouping.pageNumber,
+        groupIndex: context.groupIndex,
+        offerGrouping: grouping,
+        selectedProductIndex: productIndex,
+      },
+
       sourceRecordId:
         `${context.documentId}:p${grouping.pageNumber}` +
         `:g${context.groupIndex + 1}:i${productIndex + 1}`,

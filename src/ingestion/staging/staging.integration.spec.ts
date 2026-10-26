@@ -98,6 +98,22 @@ describe('StagingService PostgreSQL integration', () => {
               extractionMethod: 'DOCUMENT',
               reviewRequired: true,
               reviewReasons: ['BARCODE_MISSING'],
+
+              rawPayload: {
+                documentId: 'test-flyer',
+                pageNumber: 1,
+                selectedProductIndex: 0,
+                offerGrouping: {
+                  offerTitle: 'KRAFT Peanut Butter',
+                  promotionConditions: 'Selected varieties',
+                  eligibleProducts: [
+                    {
+                      productName: 'KRAFT Peanut Butter',
+                      advertisedPrice: '$4.97 ea',
+                    },
+                  ],
+                },
+              },
             };
 
             // Use the transaction's Prisma client.
@@ -146,6 +162,16 @@ describe('StagingService PostgreSQL integration', () => {
                 loyaltyPoints: 150,
                 salePrice: 4.97,
               });
+
+            expect(staged[0].rawPayload).toMatchObject({
+              documentId: 'test-flyer',
+              pageNumber: 1,
+              selectedProductIndex: 0,
+              offerGrouping: {
+                offerTitle: 'KRAFT Peanut Butter',
+                promotionConditions: 'Selected varieties',
+              },
+            });
 
             // The official catalogue must remain untouched.
             expect(await tx.product.count())

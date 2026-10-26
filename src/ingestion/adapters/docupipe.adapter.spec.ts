@@ -59,20 +59,38 @@ describe('adaptDocuPipeGrouping', () => {
 
     expect(result[0].reviewRequired).toBe(true);
     expect(result[1].reviewRequired).toBe(true);
+
+    expect(result[0].promotionGroupId)
+      .toBe('safeway-oct22-2026:p1:g7');
+
+    expect(result[1].promotionGroupId)
+      .toBe(result[0].promotionGroupId);
+
+    expect(result[0].rawPayload?.selectedProductIndex)
+      .toBe(0);
+
+    expect(result[1].rawPayload?.selectedProductIndex)
+      .toBe(1);
+
+    expect(result[0].rawPayload?.offerGrouping)
+      .toMatchObject({
+        offerTitle: 'Atlantic Canada Lobster Tail',
+        pageNumber: 1,
+      });
   });
 
 
 
-    it('preserves a multibuy offer without inventing a unit price', () => {
+  it('preserves a multibuy offer without inventing a unit price', () => {
     const result = adaptDocuPipeGrouping(
-        {
+      {
         offerTitle: 'Raspberries',
         pageNumber: 1,
         promotionConditions: null,
         scenePointsOffer: null,
         scenePointsCondition: null,
         eligibleProducts: [
-            {
+          {
             productName: 'Raspberries',
             brand: null,
             advertisedPrice: '2/$5',
@@ -82,10 +100,10 @@ describe('adaptDocuPipeGrouping', () => {
             equivalentPrice: null,
             multibuyQuantity: 2,
             multibuyTotalPrice: 5,
-            },
+          },
         ],
-        },
-        {
+      },
+      {
         documentId: 'safeway-oct22-2026',
         groupIndex: 2,
         retailerName: 'Sobeys / Safeway',
@@ -93,7 +111,7 @@ describe('adaptDocuPipeGrouping', () => {
         observedAt: '2026-10-22T18:00:00.000Z',
         validFrom: '2026-10-22',
         validUntil: '2026-10-28',
-        },
+      },
     );
 
     expect(result).toHaveLength(1);
@@ -101,7 +119,7 @@ describe('adaptDocuPipeGrouping', () => {
     expect(result[0].promotionText).toContain('2/$5');
     expect(result[0].promotionText).toContain('Multibuy: 2 for $5.00');
     expect(result[0].reviewReasons).toContain('MULTIBUY_REQUIRES_REVIEW');
-    });
+  });
 
 
   it('preserves Scene+ rewards separately from the product price', () => {
@@ -289,95 +307,95 @@ describe('adaptDocuPipeGrouping', () => {
     // Existing Scene+ functionality must still work.
     expect(result[0].loyaltyPoints).toBe(500);
     expect(result[0].loyaltyCondition).toBe('when you buy 2');
-});
+  });
 
 
-it('detects member pricing in promotion conditions', () => {
-  const result = adaptDocuPipeGrouping(
-    {
-      offerTitle: 'PEPSI Soft Drinks 12x355 mL',
-      pageNumber: 18,
-      promotionConditions:
-        'Member price $7.99, $9.49 without Scene+ Card',
-      scenePointsOffer: null,
-      scenePointsCondition: null,
-      eligibleProducts: [
-        {
-          productName: 'PEPSI Soft Drinks',
-          brand: 'Pepsi',
-          advertisedPrice: '$7.99',
-          numericPrice: 7.99,
-          priceUnit: 'each',
-          packageSize: '12x355 mL',
-          equivalentPrice: null,
-        },
-      ],
-    },
-    {
-      documentId: 'safeway-oct22-2026',
-      groupIndex: 0,
-      retailerName: 'Sobeys / Safeway',
-      region: 'WST_AB_MB_SK',
-      observedAt: '2026-10-24T21:34:05.000Z',
-      validFrom: '2026-10-22',
-      validUntil: '2026-10-28',
-    },
-  );
+  it('detects member pricing in promotion conditions', () => {
+    const result = adaptDocuPipeGrouping(
+      {
+        offerTitle: 'PEPSI Soft Drinks 12x355 mL',
+        pageNumber: 18,
+        promotionConditions:
+          'Member price $7.99, $9.49 without Scene+ Card',
+        scenePointsOffer: null,
+        scenePointsCondition: null,
+        eligibleProducts: [
+          {
+            productName: 'PEPSI Soft Drinks',
+            brand: 'Pepsi',
+            advertisedPrice: '$7.99',
+            numericPrice: 7.99,
+            priceUnit: 'each',
+            packageSize: '12x355 mL',
+            equivalentPrice: null,
+          },
+        ],
+      },
+      {
+        documentId: 'safeway-oct22-2026',
+        groupIndex: 0,
+        retailerName: 'Sobeys / Safeway',
+        region: 'WST_AB_MB_SK',
+        observedAt: '2026-10-24T21:34:05.000Z',
+        validFrom: '2026-10-22',
+        validUntil: '2026-10-28',
+      },
+    );
 
-  expect(result).toHaveLength(1);
+    expect(result).toHaveLength(1);
 
-  expect(result[0].advertisedPriceAmount).toBe(7.99);
-  expect(result[0].memberPrice).toBe(7.99);
-  expect(result[0].salePrice).toBeUndefined();
+    expect(result[0].advertisedPriceAmount).toBe(7.99);
+    expect(result[0].memberPrice).toBe(7.99);
+    expect(result[0].salePrice).toBeUndefined();
 
-  expect(result[0].priceRestriction).toBe('MEMBER_ONLY');
+    expect(result[0].priceRestriction).toBe('MEMBER_ONLY');
 
-  expect(result[0].reviewReasons)
-    .toContain('MEMBER_ONLY_PRICE');
+    expect(result[0].reviewReasons)
+      .toContain('MEMBER_ONLY_PRICE');
 
-  expect(result[0].promotionText)
-    .toContain('$9.49 without Scene+ Card');
-});
+    expect(result[0].promotionText)
+      .toContain('$9.49 without Scene+ Card');
+  });
 
 
-it('does not treat minimum-purchase pricing as unrestricted', () => {
-  const [offer] = adaptDocuPipeGrouping(
-    {
-      offerTitle: 'Minimum quantity promotion',
-      pageNumber: 1,
-      promotionConditions: null,
-      scenePointsOffer: null,
-      scenePointsCondition: null,
-      eligibleProducts: [
-        {
-          productName: 'Example Product',
-          brand: null,
-          advertisedPrice: '$5 ea when you buy 2 or more',
-          numericPrice: 5,
-          priceUnit: 'each',
-          packageSize: null,
-          equivalentPrice: null,
-        },
-      ],
-    },
-    {
-      documentId: 'minimum-purchase-test',
-      groupIndex: 0,
-      retailerName: 'Safeway',
-      observedAt: '2026-10-24T20:00:00.000Z',
-      validFrom: '2026-10-22',
-      validUntil: '2026-10-28',
-    },
-  );
+  it('does not treat minimum-purchase pricing as unrestricted', () => {
+    const [offer] = adaptDocuPipeGrouping(
+      {
+        offerTitle: 'Minimum quantity promotion',
+        pageNumber: 1,
+        promotionConditions: null,
+        scenePointsOffer: null,
+        scenePointsCondition: null,
+        eligibleProducts: [
+          {
+            productName: 'Example Product',
+            brand: null,
+            advertisedPrice: '$5 ea when you buy 2 or more',
+            numericPrice: 5,
+            priceUnit: 'each',
+            packageSize: null,
+            equivalentPrice: null,
+          },
+        ],
+      },
+      {
+        documentId: 'minimum-purchase-test',
+        groupIndex: 0,
+        retailerName: 'Safeway',
+        observedAt: '2026-10-24T20:00:00.000Z',
+        validFrom: '2026-10-22',
+        validUntil: '2026-10-28',
+      },
+    );
 
-  expect(offer.advertisedPriceAmount).toBe(5);
-  expect(offer.advertisedPriceUnit).toBe('each');
-  expect(offer.minimumPurchaseQuantity).toBe(2);
-  expect(offer.salePrice).toBeUndefined();
+    expect(offer.advertisedPriceAmount).toBe(5);
+    expect(offer.advertisedPriceUnit).toBe('each');
+    expect(offer.minimumPurchaseQuantity).toBe(2);
+    expect(offer.salePrice).toBeUndefined();
 
-  expect(offer.reviewReasons)
-    .toContain('MINIMUM_QUANTITY_REQUIRED');
-});
+    expect(offer.reviewReasons)
+      .toContain('MINIMUM_QUANTITY_REQUIRED');
+  });
 
 
 });

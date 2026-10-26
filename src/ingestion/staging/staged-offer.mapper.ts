@@ -26,6 +26,7 @@ export interface PreparedStagedOffer {
   reviewReasons: string[];
 
   normalizedPayload: Record<string, unknown>;
+  rawPayload?: Record<string, unknown>;
 }
 
 export function prepareStagedOffers(
@@ -88,6 +89,12 @@ export function prepareStagedOffers(
       reviewReasons: [...offer.reviewReasons],
 
       normalizedPayload,
+      rawPayload: offer.rawPayload
+        ? (JSON.parse(JSON.stringify(offer.rawPayload)) as Record<
+          string,
+          unknown
+        >)
+        : undefined,
     };
   });
 }

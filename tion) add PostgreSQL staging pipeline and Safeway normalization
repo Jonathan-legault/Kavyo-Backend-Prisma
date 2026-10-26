@@ -1,0 +1,13 @@
+ .../20261024223211_add_staged_offers/migration.sql |  41 [32m+++++[m
+ prisma/schema.prisma                               |  72 [32m+++++++[m[31m--[m
+ scripts/report-safeway.ts                          |  40 [32m++++[m[31m-[m
+ scripts/stage-safeway.ts                           | 177 [32m++++++++++++++++++++[m
+ src/ingestion/adapters/docupipe.adapter.spec.ts    |  39 [32m+++++[m
+ src/ingestion/adapters/docupipe.adapter.ts         |  27 [32m+++[m[31m-[m
+ src/ingestion/contracts/normalized-offer.ts        |   2 [32m+[m[31m-[m
+ src/ingestion/staging/staged-offer.mapper.spec.ts  |  90 [32m+++++++++++[m
+ src/ingestion/staging/staged-offer.mapper.ts       |  93 [32m+++++++++++[m
+ src/ingestion/staging/staging.integration.spec.ts  | 180 [32m+++++++++++++++++++++[m
+ src/ingestion/staging/staging.service.spec.ts      | 143 [32m++++++++++++++++[m
+ src/ingestion/staging/staging.service.ts           |  99 [32m++++++++++++[m
+ 12 files changed, 989 insertions(+), 14 deletions(-)

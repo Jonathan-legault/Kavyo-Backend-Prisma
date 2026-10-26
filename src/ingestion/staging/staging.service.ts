@@ -16,7 +16,7 @@ export interface StagingResult {
 
 @Injectable()
 export class StagingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async stageOffers(
     ingestBatchId: string,
@@ -78,8 +78,14 @@ export class StagingService {
         reviewRequired: offer.reviewRequired,
 
         reviewReasons: offer.reviewReasons,
+
         normalizedPayload:
           offer.normalizedPayload as Prisma.InputJsonValue,
+
+        rawPayload:
+          offer.rawPayload === undefined
+            ? undefined
+            : (offer.rawPayload as Prisma.InputJsonValue),
       }));
 
     // 5. Insert into the staging table only
