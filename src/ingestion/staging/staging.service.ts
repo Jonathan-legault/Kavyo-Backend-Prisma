@@ -54,8 +54,10 @@ export class StagingService {
 
     // 4. Convert prepared records into Prisma input
     const data: Prisma.StagedOfferCreateManyInput[] =
-      prepared.map((offer) => ({
+      prepared.map((offer, index) => ({
         ingestBatchId,
+        sourceSystemId: batch.sourceSystemId,
+       observedAt: new Date(offers[index].observedAt),
 
         recordKey: offer.recordKey,
         sourceRecordId: offer.sourceRecordId,
