@@ -1,4 +1,5 @@
 import type { FlippFlyer, FlippFlyerItem, FlippItemDetail } from "../flipp/flipp.types.js";
+import { validateOffer } from '../../ingestion/validation/offer-validator.js';
 import {
   normalizeSizeText,
   parsePackageSize,
@@ -60,15 +61,6 @@ const FAMILY_PATTERNS: Array<[string, RegExp]> = [
   ["personal_care", /\b(?:shampoo|conditioner|body wash|bubble bath|toothpaste|deodorant|razors?)\b/i],
 ];
 
-const BLOCKING_REVIEW_REASONS = new Set([
-  "PRICE_MISSING",
-  "PACKAGE_SIZE_MISSING",
-  "PACKAGE_SIZE_RANGE",
-  "MULTI_VARIANT",
-  "MULTIBUY",
-  "PRICE_BY_WEIGHT",
-  "MEMBER_PRICE",
-]);
 
 export interface NormalizeFlyerOfferInput {
   retailerName: string;
@@ -114,6 +106,7 @@ export interface NormalizedFlyerOffer {
   reviewReasons: string[];
   normalizedPayload: Record<string, unknown>;
   rawPayload: Record<string, unknown>;
+  offerComment: string | null;
 }
 
 export function normalizeFlyerOffer(
@@ -156,11 +149,24 @@ export function normalizeFlyerOffer(
     ? priceWeight
       ? unitPriceFromWeight(advertisedPriceAmount, priceWeight.unit)
       : unitPriceFromPackage(
-          advertisedPriceAmount,
-          packageSize.quantityValue,
-          packageSize.quantityUnit,
-        )
+        advertisedPriceAmount,
+        packageSize.quantityValue,
+        packageSize.quantityUnit,
+      )
     : null;
+
+
+  const hasAmbiguousQuantity =
+    isMultiVariant || packageSize.isRange;
+
+  const safeQuantityValue = hasAmbiguousQuantity
+    ? null
+    : packageSize.quantityValue;
+
+  const safeUnitPrice = hasAmbiguousQuantity
+    ? null
+    : unitPrice;
+
 
   const reviewReasons: string[] = [];
   if (!advertisedPriceAmount) reviewReasons.push("PRICE_MISSING");
@@ -174,22 +180,52 @@ export function normalizeFlyerOffer(
   if (isMemberPrice) reviewReasons.push("MEMBER_PRICE");
   if (!hasUsableGtin(detail.sku)) reviewReasons.push("NO_GTIN");
 
-  const reviewRequired = reviewReasons.some((reason) =>
-    BLOCKING_REVIEW_REASONS.has(reason),
-  );
-  const status = reviewRequired ? "PENDING_REVIEW" : "NORMALIZED";
+  const validation = validateOffer({
+    productName: item.name,
+    brand: item.brand,
+    retailerName,
+
+    advertisedPriceAmount,
+    quantityValue: packageSize.quantityValue,
+    quantityUnit: packageSize.quantityUnit,
+    quantityText: packageSize.text,
+
+    unitPrice: unitPrice?.value,
+    unitPriceBasis: unitPrice?.basis,
+    pricingBasis,
+    quantityIsApproximate: packageSize.isApproximate,
+    isPriceRange: packageSize.isRange,
+
+    promotionText: promoText(saleStory, disclaimerText),
+    isMemberPrice,
+    isMultibuy,
+  });
+
+  const reviewRequired =
+    validation.reviewRequired || isMultiVariant;
+
+  const finalReviewReasons = isMultiVariant
+    ? [...new Set([...validation.reasons, "MULTI_VARIANT"])]
+    : validation.reasons;
+
+  const status = reviewRequired
+  ? "PENDING_REVIEW"
+  : "NORMALIZED";
+
   const matchKey =
     !isMultiVariant && !packageSize.isRange
       ? buildMatchKey(
-          item.brand,
-          item.name,
-          packageSize.text,
-          packageSize.quantityValue,
-          packageSize.quantityUnit,
-        )
+        item.brand,
+        item.name,
+        packageSize.text,
+        packageSize.quantityValue,
+        packageSize.quantityUnit,
+      )
       : null;
   const familyKey =
-    family && unitPrice?.basis ? `${family}|${unitPrice.basis}` : family;
+    family && safeUnitPrice?.basis
+      ? `${family}|${safeUnitPrice.basis}`
+      : family;
 
   const normalizedPayload: Record<string, unknown> = {
     sourceRecordId: String(item.id),
@@ -199,7 +235,7 @@ export function normalizeFlyerOffer(
     brand: item.brand ?? null,
     descriptionText,
     packageSizeText: packageSize.text,
-    quantityValue: packageSize.quantityValue,
+    quantityValue: safeQuantityValue,
     quantityUnit: packageSize.quantityUnit,
     quantityIsApproximate: packageSize.isApproximate,
     family,
@@ -210,11 +246,13 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
-    unitPrice: unitPrice?.value ?? null,
-    unitPriceBasis: unitPrice?.basis ?? null,
+    unitPrice: safeUnitPrice?.value ?? null,
+    unitPriceBasis: safeUnitPrice?.basis ?? null,
     validFrom: item.valid_from ?? flyer.valid_from,
     validUntil: item.valid_to ?? flyer.valid_to,
-    reviewReasons,
+    reviewReasons: finalReviewReasons,
+    extractionWarnings: reviewReasons,
+    offerComment: validation.offerComment,
     status,
   };
 
@@ -225,7 +263,7 @@ export function normalizeFlyerOffer(
     brand: cleanNullable(item.brand),
     descriptionText,
     packageSizeText: packageSize.text,
-    quantityValue: packageSize.quantityValue,
+    quantityValue: safeQuantityValue,
     quantityUnit: packageSize.quantityUnit,
     quantityIsApproximate: packageSize.isApproximate,
     family,
@@ -237,8 +275,8 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
-    unitPrice: unitPrice?.value ?? null,
-    unitPriceBasis: unitPrice?.basis ?? null,
+    unitPrice: safeUnitPrice?.value ?? null,
+    unitPriceBasis: safeUnitPrice?.basis ?? null,
     currency: "CAD",
     promotionText: promoText(saleStory, disclaimerText) || null,
     validFrom: toDate(item.valid_from ?? flyer.valid_from),
@@ -252,7 +290,8 @@ export function normalizeFlyerOffer(
     familyKey,
     status,
     reviewRequired,
-    reviewReasons,
+    reviewReasons: finalReviewReasons,
+    offerComment: validation.offerComment,
     normalizedPayload,
     rawPayload: {
       item,

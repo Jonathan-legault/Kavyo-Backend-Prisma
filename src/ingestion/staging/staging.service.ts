@@ -57,7 +57,7 @@ export class StagingService {
       prepared.map((offer, index) => ({
         ingestBatchId,
         sourceSystemId: batch.sourceSystemId,
-       observedAt: new Date(offers[index].observedAt),
+        observedAt: new Date(offers[index].observedAt),
 
         recordKey: offer.recordKey,
         sourceRecordId: offer.sourceRecordId,
@@ -78,8 +78,8 @@ export class StagingService {
 
         status: 'PENDING_REVIEW',
         reviewRequired: offer.reviewRequired,
-
         reviewReasons: offer.reviewReasons,
+        offerComment: offer.offerComment,
 
         normalizedPayload:
           offer.normalizedPayload as Prisma.InputJsonValue,

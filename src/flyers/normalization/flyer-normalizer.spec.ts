@@ -1,6 +1,14 @@
+
 import { describe, expect, it } from "vitest";
-import type { FlippFlyer, FlippFlyerItem, FlippItemDetail } from "../flipp/flipp.types.js";
-import { classifyFamily, normalizeFlyerOffer } from "./flyer-normalizer.js";
+import type {
+  FlippFlyer,
+  FlippFlyerItem,
+  FlippItemDetail,
+} from "../flipp/flipp.types.js";
+import {
+  classifyFamily,
+  normalizeFlyerOffer,
+} from "./flyer-normalizer.js";
 
 const flyer: FlippFlyer = {
   id: 8205958,
@@ -13,7 +21,9 @@ const flyer: FlippFlyer = {
   categories: ["Groceries"],
 };
 
-function item(overrides: Partial<FlippFlyerItem> = {}): FlippFlyerItem {
+function item(
+  overrides: Partial<FlippFlyerItem> = {},
+): FlippFlyerItem {
   return {
     id: 1049922801,
     flyer_id: flyer.id,
@@ -22,12 +32,15 @@ function item(overrides: Partial<FlippFlyerItem> = {}): FlippFlyerItem {
     price: "5.99",
     valid_from: flyer.valid_from,
     valid_to: flyer.valid_to,
-    cutout_image_url: "http://f.wishabi.net/page_items/example.jpg",
+    cutout_image_url:
+      "http://f.wishabi.net/page_items/example.jpg",
     ...overrides,
   };
 }
 
-function detail(overrides: Partial<FlippItemDetail> = {}): FlippItemDetail {
+function detail(
+  overrides: Partial<FlippItemDetail> = {},
+): FlippItemDetail {
   return {
     id: 1049922801,
     flyer_id: flyer.id,
@@ -42,7 +55,7 @@ function detail(overrides: Partial<FlippItemDetail> = {}): FlippItemDetail {
 }
 
 describe("normalizeFlyerOffer", () => {
-  it("normalizes a member-priced cheese offer and flags the restriction", () => {
+  it("normalizes a member-priced cheese offer and preserves restrictions", () => {
     const result = normalizeFlyerOffer({
       retailerName: "Safeway",
       flyer,
@@ -52,24 +65,39 @@ describe("normalizeFlyerOffer", () => {
     });
 
     expect(result).toMatchObject({
-      productName: "COMPLIMENTS Halloumi-Style, Feta or Bocconcini",
+      productName:
+        "COMPLIMENTS Halloumi-Style, Feta or Bocconcini",
       brand: "Compliments",
       packageSizeText: "200 g",
-      quantityValue: 200,
+      quantityValue: null,
       quantityUnit: "g",
       advertisedPriceAmount: 5.99,
       regularPriceAmount: 6.99,
       pricingBasis: "FIXED",
-      unitPrice: 2.995,
-      unitPriceBasis: "100g",
+      unitPrice: null,
+      unitPriceBasis: null,
       isMemberPrice: true,
       isMultiVariant: true,
       status: "PENDING_REVIEW",
       reviewRequired: true,
     });
-    expect(result.reviewReasons).toContain("MEMBER_PRICE");
+
     expect(result.reviewReasons).toContain("MULTI_VARIANT");
-    expect(result.reviewReasons).toContain("NO_GTIN");
+
+    expect(result.matchKey).toBeNull();
+
+    expect(result.offerComment).toContain(
+      "Membership conditions apply",
+    );
+
+    expect(result.normalizedPayload.extractionWarnings)
+      .toEqual(
+        expect.arrayContaining([
+          "MEMBER_PRICE",
+          "MULTI_VARIANT",
+          "NO_GTIN",
+        ]),
+      );
   });
 
   it("normalizes a fixed-price multi-pack without a barcode", () => {
@@ -115,10 +143,11 @@ describe("normalizeFlyerOffer", () => {
       status: "NORMALIZED",
       reviewRequired: false,
     });
+
     expect(result.matchKey).toContain("coca cola");
   });
 
-  it("marks produce sold by weight as pending review", () => {
+  it("normalizes produce sold by weight using its price basis", () => {
     const result = normalizeFlyerOffer({
       retailerName: "Calgary Co-op",
       flyer: {
@@ -150,27 +179,36 @@ describe("normalizeFlyerOffer", () => {
       quantityValue: null,
       unitPrice: 0.4387,
       unitPriceBasis: "100g",
-      status: "PENDING_REVIEW",
+      status: "NORMALIZED",
     });
-    expect(result.reviewReasons).toContain("PRICE_BY_WEIGHT");
+
+    expect(result.normalizedPayload.extractionWarnings)
+      .toContain("PRICE_BY_WEIGHT");
   });
 
   it("does not classify a cheese-flavoured prepared snack as cheese", () => {
     expect(
-      classifyFamily("Brar's jalapeno and cheese samosas", null),
+      classifyFamily(
+        "Brar's jalapeno and cheese samosas",
+        null,
+      ),
     ).toBe("snacks");
   });
 
   it("classifies cream cheese as cheese, not milk", () => {
-    expect(classifyFamily("Dairy-Free Cream Cheese", "210 g")).toBe("cheese");
+    expect(
+      classifyFamily("Dairy-Free Cream Cheese", "210 g"),
+    ).toBe("cheese");
   });
 
   it("classifies a cheese pizza as pizza", () => {
-    expect(classifyFamily("Cheese Pizza", null)).toBe("pizza");
+    expect(classifyFamily("Cheese Pizza", null))
+      .toBe("pizza");
   });
 
   it("classifies pasta sauce as sauce", () => {
-    expect(classifyFamily("Pasta Sauce", null)).toBe("sauce");
+    expect(classifyFamily("Pasta Sauce", null))
+      .toBe("sauce");
   });
 
   it("keeps a size range explicit and marks it approximate", () => {
@@ -191,12 +229,18 @@ describe("normalizeFlyerOffer", () => {
     });
 
     expect(result).toMatchObject({
-      quantityValue: 227.5,
+      quantityValue: null,
       quantityUnit: "g",
       quantityIsApproximate: true,
       isPriceRange: true,
+      unitPrice: null,
+      unitPriceBasis: null,
       status: "PENDING_REVIEW",
     });
-    expect(result.reviewReasons).toContain("PACKAGE_SIZE_RANGE");
+
+    expect(result.matchKey).toBeNull();
+
+    expect(result.reviewReasons)
+      .toContain("PACKAGE_SIZE_RANGE");
   });
 });

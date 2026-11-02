@@ -48,10 +48,25 @@ describe('prepareStagedOffers', () => {
       .toBe('PENDING_REVIEW');
 
     expect(result[0].reviewRequired)
-      .toBe(true);
+      .toBe(false);
+
+    expect(result[0].reviewReasons)
+      .toEqual([]);
 
     expect(result[0].normalizedPayload.salePrice)
       .toBe(4.97);
+  });
+
+  it('accepts offers without a barcode while preserving source evidence', () => {
+    const result = prepareStagedOffers([testOffer]);
+
+    expect(result[0].reviewRequired).toBe(false);
+    expect(result[0].reviewReasons).toEqual([]);
+
+    expect(result[0].normalizedPayload.reviewReasons)
+      .toContain('BARCODE_MISSING');
+
+    expect(result[0].status).toBe('PENDING_REVIEW');
   });
 
   it('generates the same key for the same source record', () => {

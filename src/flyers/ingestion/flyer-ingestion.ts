@@ -431,6 +431,7 @@ function toCreateInput(
     unitPriceBasis: truncate(offer.unitPriceBasis, 20),
     currency: offer.currency,
     promotionText: offer.promotionText,
+    offerComment: offer.offerComment,
     validFrom: offer.validFrom,
     validUntil: offer.validUntil,
     observedAt: offer.observedAt,

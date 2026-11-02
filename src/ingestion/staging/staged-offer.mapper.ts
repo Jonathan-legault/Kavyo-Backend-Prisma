@@ -1,6 +1,8 @@
 
 import { createHash } from 'node:crypto';
 
+import { validateOffer } from '../validation/offer-validator.js';
+
 import type { NormalizedOffer } from '../contracts/normalized-offer.js';
 
 export interface PreparedStagedOffer {
@@ -14,6 +16,8 @@ export interface PreparedStagedOffer {
 
   productName: string;
   brand?: string;
+
+  offerComment: string | null;
 
   advertisedPriceText?: string;
   advertisedPriceAmount?: number;
@@ -60,6 +64,24 @@ export function prepareStagedOffers(
 
     seenKeys.add(recordKey);
 
+    const validation = validateOffer({
+      productName: offer.productName,
+      brand: offer.brand,
+      retailerName: offer.retailerName,
+      storeIdentifier: offer.storeIdentifier,
+
+      advertisedPriceAmount: offer.advertisedPriceAmount,
+      quantityValue: offer.quantityValue,
+      quantityUnit: offer.quantityUnit,
+      quantityText: offer.quantityText,
+      advertisedPriceUnit: offer.advertisedPriceUnit,
+
+      promotionText: offer.promotionText,
+      loyaltyCondition: offer.loyaltyCondition,
+      minimumPurchaseQuantity: offer.minimumPurchaseQuantity,
+      priceRestriction: offer.priceRestriction,
+    });
+
     // Convert the normalized offer into a JSON-safe
     // object, omitting undefined properties.
     const normalizedPayload = JSON.parse(
@@ -85,8 +107,9 @@ export function prepareStagedOffers(
       extractionMethod: offer.extractionMethod,
 
       status: 'PENDING_REVIEW',
-      reviewRequired: true,
-      reviewReasons: [...offer.reviewReasons],
+      reviewRequired: validation.reviewRequired,
+      reviewReasons: validation.reasons,
+      offerComment: validation.offerComment,
 
       normalizedPayload,
       rawPayload: offer.rawPayload

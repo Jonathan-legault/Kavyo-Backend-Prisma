@@ -31,6 +31,7 @@ const OFFER_SELECT = {
   unitPriceBasis: true,
   currency: true,
   promotionText: true,
+  offerComment: true,
   validFrom: true,
   validUntil: true,
   observedAt: true,
@@ -78,6 +79,7 @@ export interface SerializedOffer {
   unitPriceBasis: string | null;
   currency: string;
   promotionText: string | null;
+  offerComment: string | null;
   validFrom: Date | null;
   validUntil: Date | null;
   observedAt: Date;
@@ -99,7 +101,7 @@ export interface SerializedOffer {
 
 @Injectable()
 export class FlyersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getSummary() {
     const batch = await this.getLatestBatch();
