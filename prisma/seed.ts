@@ -74,6 +74,11 @@ async function main() {
       sourceType: "RETAILER_WEBSITE",
       baseUrl: "https://www.sobeys.com",
     },
+    {
+      name: "FLIPP_FLYERS",
+      sourceType: "FLYER_AGGREGATOR",
+      baseUrl: "https://flipp.com",
+    },
   ];
 
   for (const source of sourceSystems) {

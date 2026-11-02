@@ -30,9 +30,10 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  roles UserRole[]
+  roles      UserRole[]
   preference UserPreference?
-  baskets Basket[]
+  baskets    Basket[]
+
   @@map("users")
 }
 
@@ -76,6 +77,7 @@ model Product {
   isActive          Boolean            @default(true) @map("is_active")
   priceObservations PriceObservation[]
   basketItems       BasketItem[]
+  stagedOffers      StagedOffer[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -127,7 +129,9 @@ model Retailer {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  stores Store[]
+  stores       Store[]
+  flyers       Flyer[]
+  stagedOffers StagedOffer[]
 
   @@map("retailers")
 }
@@ -147,7 +151,7 @@ model Store {
 
   isActive          Boolean            @default(true) @map("is_active")
   priceObservations PriceObservation[]
-  userPreferences UserPreference[]
+  userPreferences   UserPreference[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -173,6 +177,8 @@ model SourceSystem {
 
   ingestBatches     IngestBatch[]
   priceObservations PriceObservation[]
+  flyers            Flyer[]
+  stagedOffers      StagedOffer[]
 
   @@map("source_systems")
 }
@@ -195,11 +201,112 @@ model IngestBatch {
 
   sourceSystem      SourceSystem       @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
   priceObservations PriceObservation[]
+  stagedOffers      StagedOffer[]
 
   @@index([sourceSystemId])
   @@index([status])
   @@index([startedAt])
   @@map("ingest_batches")
+}
+
+model Flyer {
+  id             String    @id @default(uuid()) @db.Uuid
+  sourceSystemId String    @map("source_system_id") @db.Uuid
+  retailerId     String?   @map("retailer_id") @db.Uuid
+  externalId     String    @map("external_id") @db.VarChar(100)
+  merchantId     String?   @map("merchant_id") @db.VarChar(50)
+  name           String    @db.VarChar(200)
+  postalCode     String?   @map("postal_code") @db.VarChar(20)
+  locale         String?   @db.VarChar(20)
+  validFrom      DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil     DateTime? @map("valid_until") @db.Timestamptz(6)
+  sourceUrl      String?   @map("source_url") @db.VarChar(1000)
+  thumbnailUrl   String?   @map("thumbnail_url") @db.VarChar(1000)
+  fetchedAt      DateTime  @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  rawPayload     Json?     @map("raw_payload") @db.JsonB
+
+  sourceSystem SourceSystem  @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
+  retailer     Retailer?     @relation(fields: [retailerId], references: [id], onDelete: SetNull)
+  stagedOffers StagedOffer[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([sourceSystemId, externalId])
+  @@index([retailerId, validUntil])
+  @@map("flyers")
+}
+
+model StagedOffer {
+  id             String  @id @default(uuid()) @db.Uuid
+  ingestBatchId  String  @map("ingest_batch_id") @db.Uuid
+  sourceSystemId String  @map("source_system_id") @db.Uuid
+  flyerId        String  @map("flyer_id") @db.Uuid
+  retailerId     String? @map("retailer_id") @db.Uuid
+
+  sourceRecordId  String  @map("source_record_id") @db.VarChar(150)
+  retailerName    String  @map("retailer_name") @db.VarChar(150)
+  storeIdentifier String? @map("store_identifier") @db.VarChar(150)
+
+  productName     String  @map("product_name") @db.VarChar(500)
+  brand           String? @db.VarChar(200)
+  descriptionText String? @map("description_text") @db.Text
+
+  packageSizeText       String?  @map("package_size_text") @db.VarChar(200)
+  quantityValue         Decimal? @map("quantity_value") @db.Decimal(12, 3)
+  quantityUnit          String?  @map("quantity_unit") @db.VarChar(20)
+  quantityIsApproximate Boolean  @default(false) @map("quantity_is_approximate")
+  family                String?  @db.VarChar(80)
+
+  advertisedPriceText   String?  @map("advertised_price_text") @db.VarChar(100)
+  advertisedPriceAmount Decimal? @map("advertised_price_amount") @db.Decimal(10, 3)
+  regularPriceAmount    Decimal? @map("regular_price_amount") @db.Decimal(10, 3)
+  pricingBasis          String   @default("UNKNOWN") @map("pricing_basis") @db.VarChar(30)
+
+  isMemberPrice  Boolean @default(false) @map("is_member_price")
+  isMultibuy     Boolean @default(false) @map("is_multibuy")
+  isMultiVariant Boolean @default(false) @map("is_multi_variant")
+  isPriceRange   Boolean @default(false) @map("is_price_range")
+
+  unitPrice      Decimal? @map("unit_price") @db.Decimal(12, 4)
+  unitPriceBasis String?  @map("unit_price_basis") @db.VarChar(20)
+  currency       String   @default("CAD") @db.VarChar(3)
+
+  promotionText String?   @map("promotion_text") @db.Text
+  validFrom     DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil    DateTime? @map("valid_until") @db.Timestamptz(6)
+  observedAt    DateTime  @map("observed_at") @db.Timestamptz(6)
+
+  imageUrl  String? @map("image_url") @db.VarChar(1000)
+  sourceUrl String? @map("source_url") @db.VarChar(1000)
+
+  matchKey  String? @map("match_key") @db.VarChar(300)
+  familyKey String? @map("family_key") @db.VarChar(150)
+
+  status         String  @default("PENDING_REVIEW") @db.VarChar(30)
+  reviewRequired Boolean @default(true) @map("review_required")
+  reviewReasons  Json    @map("review_reasons") @db.JsonB
+
+  matchedProductId  String? @map("matched_product_id") @db.Uuid
+  normalizedPayload Json    @map("normalized_payload") @db.JsonB
+  rawPayload        Json?   @map("raw_payload") @db.JsonB
+
+  ingestBatch    IngestBatch  @relation(fields: [ingestBatchId], references: [id], onDelete: Restrict)
+  sourceSystem   SourceSystem @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
+  flyer          Flyer        @relation(fields: [flyerId], references: [id], onDelete: Restrict)
+  retailer       Retailer?    @relation(fields: [retailerId], references: [id], onDelete: SetNull)
+  matchedProduct Product?     @relation(fields: [matchedProductId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([ingestBatchId, sourceRecordId])
+  @@index([sourceSystemId, sourceRecordId])
+  @@index([retailerId, status])
+  @@index([family, unitPriceBasis])
+  @@index([matchKey])
+  @@index([status, observedAt])
+  @@map("staged_offers")
 }
 
 model PriceObservation {
@@ -238,16 +345,16 @@ model PriceObservation {
 }
 
 model UserPreference {
-  id                    String         @id @default(uuid()) @db.Uuid
-  userId                String         @unique @map("user_id") @db.Uuid
-  usualStoreId          String?        @map("usual_store_id") @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
+  userId       String  @unique @map("user_id") @db.Uuid
+  usualStoreId String? @map("usual_store_id") @db.Uuid
 
-  postalCode            String?        @map("postal_code") @db.VarChar(20)
-  householdSize         Int?           @map("household_size")
-  transportMode         TransportMode? @map("transport_mode")
+  postalCode    String?        @map("postal_code") @db.VarChar(20)
+  householdSize Int?           @map("household_size")
+  transportMode TransportMode? @map("transport_mode")
 
-  maxTravelDistanceKm   Decimal?       @map("max_travel_distance_km") @db.Decimal(6, 2)
-  maxExtraTravelMinutes Int?           @map("max_extra_travel_minutes")
+  maxTravelDistanceKm   Decimal? @map("max_travel_distance_km") @db.Decimal(6, 2)
+  maxExtraTravelMinutes Int?     @map("max_extra_travel_minutes")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

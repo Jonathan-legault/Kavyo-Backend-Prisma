@@ -41,9 +41,12 @@ The backend currently includes:
 - Calgary postal-code lookup by FSA centroid
 - basket price comparison with sale/regular price handling
 - travel-cost estimation and cheapest-store recommendation
+- weekly flyer ingestion from Flipp for Safeway, Walmart, and Calgary Co-op
+- staged flyer offers with package-size, unit-price, and review-flag normalization
+- flyer offer listing, summary, exact-match, and similar-product comparison APIs
 - DTO validation
 - authentication and authorization error handling
-- 27 unit tests using Vitest
+- 50 unit tests using Vitest
 - 31 end-to-end tests using Vitest and Supertest
 - Postman requests for authentication, user, and basket API testing
 
@@ -114,6 +117,15 @@ kavyo-backend/
 │   │   ├── quick-compare.service.ts
 │   │   └── comparison.service.ts
 │   │
+│   ├── flyers/
+│   │   ├── dto/
+│   │   ├── flipp/
+│   │   ├── ingestion/
+│   │   ├── normalization/
+│   │   ├── flyers.controller.ts
+│   │   ├── flyers.module.ts
+│   │   └── flyers.service.ts
+│   │
 │   ├── prisma/
 │   │   ├── prisma.module.ts
 │   │   └── prisma.service.ts
@@ -127,6 +139,12 @@ kavyo-backend/
 ├── test/
 │   ├── app.e2e-spec.ts
 │   └── basket.e2e-spec.ts
+│
+├── docs/
+│   └── flyer-ingestion.md
+│
+├── scripts/
+│   └── ingest-flyers.ts
 │
 ├── .env.example
 ├── .gitignore
@@ -642,11 +660,11 @@ npm run test:e2e
 Current result:
 
 ```text
-27 unit tests passing
+50 unit tests passing
 31 end-to-end tests passing
 ```
 
-Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, and numeric parsing.
+Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, numeric parsing, flyer package-size parsing, unit-price conversion, multi-pack and range handling, member-price detection, and flyer offer normalization.
 
 The current E2E suite verifies:
 
@@ -791,18 +809,25 @@ Promotion-condition support is planned for a later backend milestone.
 - Haversine travel-distance and driving-cost estimation
 - cheapest complete-store recommendation
 - `STAY` / `SWITCH` baseline-store comparison
+- Flipp flyer ingestion for Safeway, Walmart, and Calgary Co-op
+- staged flyer offers with package-size and unit-price normalization
+- review flags for member, multibuy, range, variant, and weight-based prices
+- exact-product and similar-product flyer comparison APIs
 - automated authentication/user E2E tests
 - automated basket comparison E2E tests
+- automated flyer normalization tests
 - Postman authentication/user testing
 
 ### Next Backend Milestones
 
-1. Product and price APIs
-2. Promotion-condition model
-3. Transit, walking, and cycling travel modes
-4. Route-aware travel time and multi-stop optimization
-5. Split-basket recommendation
-6. Administrative APIs and analytics
+1. Admin review/promotion workflow for staged flyer offers
+2. Wire reviewed flyer offers into the frontend basket flow
+3. Product and price APIs
+4. Promotion-condition model
+5. Transit, walking, and cycling travel modes
+6. Route-aware travel time and multi-stop optimization
+7. Split-basket recommendation
+8. Administrative APIs and analytics
 
 ---
 
@@ -823,6 +848,41 @@ Only safe templates such as `.env.example` should be committed.
 
 ---
 
+## Weekly Flyer Pricing
+
+Weekly flyer prices are ingested from Flipp's public flyer JSON for Safeway, Walmart, and Calgary Co-op. The full source notes, normalization rules, API examples, review policy, and limitations are in [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
+
+Run an ingestion:
+
+```bash
+npm run ingest:flyers -- --postal-code T3M1T4
+```
+
+The command creates a new `IngestBatch`, one `Flyer` row per retailer flyer, and `StagedOffer` rows for each priced item. The latest completed batch is used by these public endpoints:
+
+```text
+GET /flyers/summary
+GET /flyers/offers?q=butter&status=NORMALIZED
+GET /flyers/compare?q=Quality%20Street&mode=EXACT
+GET /flyers/compare?q=butter&mode=FAMILY&status=ALL
+```
+
+Comparison policy:
+
+- `mode=EXACT` groups only offers with the same normalized brand/product name and package size. Use it for direct product substitutions.
+- `mode=FAMILY` groups offers by grocery family and unit-price basis. These are similar products, not guaranteed identical items; label them clearly in the frontend.
+- `status=NORMALIZED` (the default) excludes offers with blocking review flags such as member-only pricing, multi-buys, size ranges, and multi-variants. `status=ALL` exposes those rows with their review reasons intact.
+
+The first successful run on 2026-10-30 staged **745 offers**: 214 `NORMALIZED` and 531 `PENDING_REVIEW`, across all three retailers. These counts change with each flyer cycle.
+
+The frontend discovery surface is `/flyers`. It searches the latest batch, shows exact matches separately from similar products, keeps review flags visible, and stores the search in the URL (`/flyers?q=cheese&status=ALL`).
+
+The existing basket comparison still uses the five verified fixture products. Flyer offers remain a separate discovery/comparison surface until reviewed offers are promoted into `Product`/`PriceObservation` records or the basket flow explicitly supports staged offers.
+
+**Source terms:** confirm Flipp and retailer terms of use before production use. The ingester uses rate limiting and does not bypass access controls.
+
+---
+
 ## Data Source Guidelines
 
 Grocery data should be collected only from permitted or authorized sources.
@@ -836,6 +896,8 @@ The project should not intentionally bypass:
 - technical protections
 
 Pricing data should retain provenance wherever possible so observations can be traced back to their original source.
+
+The flyer ingester reads public Flipp flyer JSON used by retailer flyer widgets. It stores the Flipp flyer ID, retailer, validity window, source URL, and raw payload for provenance. Production use still requires a Flipp/retailer terms-of-use review; see [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
 
 ---
 
@@ -899,6 +961,12 @@ Seed reference data:
 
 ```bash
 npx prisma db seed
+```
+
+Ingest weekly flyer prices:
+
+```bash
+npm run ingest:flyers -- --postal-code T3M1T4
 ```
 
 ---
