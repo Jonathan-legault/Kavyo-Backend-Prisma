@@ -7,10 +7,15 @@ import { BasketsService } from "./baskets.service.js";
 import { PostalCodeService } from "./calculation/postal-code.service.js";
 import { QuickCompareController } from "./quick-compare.controller.js";
 import { QuickCompareService } from "./quick-compare.service.js";
+import { BasketProductsController } from "./basket-products.controller.js";
 
 @Module({
   imports: [PrismaModule, AuthModule],
-  controllers: [QuickCompareController, BasketsController],
+  controllers: [
+    QuickCompareController,
+    BasketsController,
+    BasketProductsController,
+  ],
   providers: [
     QuickCompareService,
     BasketsService,
@@ -18,4 +23,4 @@ import { QuickCompareService } from "./quick-compare.service.js";
     PostalCodeService,
   ],
 })
-export class BasketModule {}
+export class BasketModule { }
