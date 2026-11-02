@@ -74,6 +74,11 @@ async function main() {
       sourceType: "RETAILER_WEBSITE",
       baseUrl: "https://www.sobeys.com",
     },
+    {
+      name: "FLIPP_FLYERS",
+      sourceType: "FLYER_AGGREGATOR",
+      baseUrl: "https://flipp.com",
+    },
   ];
 
   for (const source of sourceSystems) {
@@ -105,6 +110,8 @@ async function main() {
         city: "Calgary",
         province: "AB",
         postalCode: "T3M 2N9",
+        latitude: 50.8747393,
+        longitude: -113.9604453,
       },
     },
     {
@@ -116,6 +123,8 @@ async function main() {
         city: "Calgary",
         province: "AB",
         postalCode: "T3M 1T4",
+        latitude: 50.8815339,
+        longitude: -113.9588322,
       },
     },
     {
@@ -127,6 +136,8 @@ async function main() {
         city: "Calgary",
         province: "AB",
         postalCode: "T3M 2P8",
+        latitude: 50.8972989,
+        longitude: -113.9411525,
       },
     },
   ];
@@ -164,6 +175,8 @@ async function main() {
           city: item.store.city,
           province: item.store.province,
           postalCode: item.store.postalCode,
+          latitude: item.store.latitude,
+          longitude: item.store.longitude,
           isActive: true,
         },
       });
@@ -176,6 +189,8 @@ async function main() {
           city: item.store.city,
           province: item.store.province,
           postalCode: item.store.postalCode,
+          latitude: item.store.latitude,
+          longitude: item.store.longitude,
           isActive: true,
         },
       });

@@ -364,6 +364,8 @@ INSERT INTO stores (
     city,
     province,
     postal_code,
+    latitude,
+    longitude,
     is_active,
     created_at,
     updated_at
@@ -376,6 +378,8 @@ SELECT
     'Calgary',
     'AB',
     'T3M 2N9',
+    50.8747393,
+    -113.9604453,
     TRUE,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
@@ -414,6 +418,8 @@ INSERT INTO stores (
     city,
     province,
     postal_code,
+    latitude,
+    longitude,
     is_active,
     created_at,
     updated_at
@@ -426,6 +432,8 @@ SELECT
     'Calgary',
     'AB',
     'T3M 1T4',
+    50.8815339,
+    -113.9588322,
     TRUE,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
@@ -464,6 +472,8 @@ INSERT INTO stores (
     city,
     province,
     postal_code,
+    latitude,
+    longitude,
     is_active,
     created_at,
     updated_at
@@ -476,6 +486,8 @@ SELECT
     'Calgary',
     'AB',
     'T3M 2P8',
+    50.8972989,
+    -113.9411525,
     TRUE,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
