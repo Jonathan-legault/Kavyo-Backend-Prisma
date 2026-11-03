@@ -243,4 +243,38 @@ describe("normalizeFlyerOffer", () => {
     expect(result.reviewReasons)
       .toContain("PACKAGE_SIZE_RANGE");
   });
+
+
+  it("prevents misleading unit prices for mixed products", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Safeway",
+      flyer,
+      item: item({
+        id: 1049922865,
+        name: "Shortening",
+        brand: "Crisco",
+        price: "3.99",
+      }),
+      detail: detail({
+        id: 1049922865,
+        name: "Shortening",
+        description:
+          "selected 454 g or FLEISCHMANN'S Baking Soda 400 g",
+        price_text: null,
+        disclaimer_text: null,
+        sale_story: null,
+      }),
+    });
+
+    expect(result.isMultiVariant).toBe(true);
+    expect(result.quantityValue).toBeNull();
+    expect(result.unitPrice).toBeNull();
+    expect(result.unitPriceBasis).toBeNull();
+    expect(result.matchKey).toBeNull();
+
+    expect(result.status).toBe("PENDING_REVIEW");
+    expect(result.reviewRequired).toBe(true);
+    expect(result.reviewReasons).toContain("MULTI_VARIANT");
+  });
+
 });
