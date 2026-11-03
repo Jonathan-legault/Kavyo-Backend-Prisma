@@ -13,6 +13,9 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  // Enable CORS so your Next.js frontend can talk to it
+  app.enableCors();
+
+  await app.listen(3000);
 }
-await bootstrap();
+bootstrap();

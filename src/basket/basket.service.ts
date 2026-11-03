@@ -6,6 +6,29 @@ import { CompareBasketDto } from "./dto/compare-basket.dto.js";
 export class BasketService {
   constructor(private readonly prisma: PrismaService) {}
 
+ async findAll() {
+    const products = await this.prisma.product.findMany({
+      where: { isActive: true },
+      include: {
+        priceObservations: {
+          include: {
+            store: {
+              include: {
+                retailer: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Map priceObservations to storePrices so the frontend finds it instantly
+    return products.map((product) => ({
+      ...product,
+      storePrices: product.priceObservations,
+    }));
+  }
+
   async compare(dto: CompareBasketDto) {
     const now = new Date();
 
