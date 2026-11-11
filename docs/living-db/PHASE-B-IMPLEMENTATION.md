@@ -15,9 +15,13 @@ Flipp flyer data is credible *advertising evidence*, not guaranteed ground truth
 
 ## Non-destructive work included in this prep branch
 - `scripts/audit-living-catalog.ts`: read-only FK and source summary; saves JSON locally.
+- `scripts/audit-living-staging.ts`: read-only missing fields and review-reason counts.
 - `src/ingestion/living-catalog/living-catalog-policy.ts`: pure acceptance/display/temporal functions.
 - `src/ingestion/living-catalog/living-catalog-policy.spec.ts`: policy tests.
-- Written migration, removal and verification procedures.
+- `src/ingestion/living-catalog/offer-write-plan.ts`: deterministic advertised-offer identity planning; no persistence.
+- `src/ingestion/living-catalog/product-enrichment.ts`: confidence-gated product update proposals; no persistence.
+- Separate Vitest suites for offer identity and enrichment proposals.
+- Written Prisma model draft, migration, removal and verification procedures.
 
 ## Implementation order after audit
 1. Confirm source provenance and dependencies of legacy Product rows; do not delete unidentified records.
@@ -37,3 +41,6 @@ No phase automatically enables the next one.
 2,273 staged offers; 1,946 strict `REVIEW`, 282 create-candidate rows / 203 groups, 42 out-of-scope, 3 matches.
 These are strict canonical-product decisions, **not** a statement that all reviewed advertisements are unusable.
 Examples: Blueberries require scope classifier fixes; multi-variant Oîkos remains a useful advert but not one canonical SKU.
+
+## Important incompleteness
+The actual Prisma schema migration, durable-offer write adapter, FK-safe import retirement, and production ingestion integration are **not implemented** on this preparation branch. They require B.1 audit evidence and a restored development DB. Do not report the living catalog as operational yet.
