@@ -40,6 +40,6 @@ describe("living-catalog policy", () => {
     expect(offerTemporalStatus(new Date(), null, null)).toBe("UNKNOWN");
   });
   it("rejects inverted date windows as unknown", () => {
-    expect(offerTemporalStatus(new Date("2026-11-15Z"), new Date("2026-11-20Z"), new Date("2026-11-10Z"))).toBe("UNKNOWN");
+    expect(offerTemporalStatus(new Date("2026-11-15T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), new Date("2026-11-10T00:00:00Z"))).toBe("UNKNOWN");
   });
 });
