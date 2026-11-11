@@ -11,7 +11,7 @@ Use Windows PowerShell from `C:\Jonathan\Capstone\Kavyo_Backend\kavyo-backend`.
 ## 1. Static and unit checks
 ```powershell
 git status --short
-npm test -- src/ingestion/living-catalog/living-catalog-policy.spec.ts
+npm test -- src/ingestion/living-catalog/
 npm test -- src/ingestion/product/
 npm run build
 git diff --check
@@ -21,7 +21,9 @@ Expected: all applicable tests pass; NestJS build clean. Warning about Vite tsco
 ## 2. Read-only catalog audit
 ```powershell
 npx tsx scripts/audit-living-catalog.ts
+npx tsx scripts/audit-living-staging.ts
 Get-Content data/research/living-db/catalog-audit.json
+Get-Content data/research/living-db/staging-quality.json
 ```
 Expected: counts and all FK constraints displayed; no database writes; `sourceSystems` and related counts are **not** proof of Product provenance.
 Compare counts with previous baseline, accounting for new ingestion.
@@ -58,3 +60,9 @@ Review migration SQL using an isolated dev DB; take pg_dump and test a restore. 
 ## 6. Approval gate
 Review generated audit report and migration diff before enabling writes.
 **Do not run destructive operations until FK-safe cleanup manifests are reviewed.**
+
+## 7. Additional enrichment gates
+- No merge or update without a separately confirmed product identity.
+- Missing attributes can be proposed but may not overwrite conflicting existing values.
+- Flyer SKU is **not** a verified barcode.
+- Inspect the JSON reports before writing migration SQL; do not assume 62,575 imports share one origin.
