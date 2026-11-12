@@ -6,6 +6,7 @@ import type {
   ListFlyerOffersQueryDto,
 } from "./dto/list-flyer-offers.dto.js";
 import { FLYER_SOURCE_SYSTEM_NAME } from "./ingestion/retailers.js";
+import { decimalToNumber, toJsonObject, toStringArray } from "./offer-utils.js";
 
 const OFFER_SELECT = {
   id: true,
@@ -31,6 +32,17 @@ const OFFER_SELECT = {
   unitPriceBasis: true,
   currency: true,
   promotionText: true,
+  promotionType: true,
+  promotionQuantity: true,
+  promotionTotalPrice: true,
+  promotionUnitPrice: true,
+  memberProgram: true,
+  memberPriceAmount: true,
+  nonMemberPriceAmount: true,
+  priceMinAmount: true,
+  priceMaxAmount: true,
+  conditionsText: true,
+  promotionConditions: true,
   validFrom: true,
   validUntil: true,
   observedAt: true,
@@ -78,6 +90,17 @@ export interface SerializedOffer {
   unitPriceBasis: string | null;
   currency: string;
   promotionText: string | null;
+  promotionType: string;
+  promotionQuantity: number | null;
+  promotionTotalPrice: number | null;
+  promotionUnitPrice: number | null;
+  memberProgram: string | null;
+  memberPriceAmount: number | null;
+  nonMemberPriceAmount: number | null;
+  priceMinAmount: number | null;
+  priceMaxAmount: number | null;
+  conditionsText: string | null;
+  promotionConditions: Record<string, unknown> | null;
   validFrom: Date | null;
   validUntil: Date | null;
   observedAt: Date;
@@ -350,6 +373,12 @@ function buildOfferWhere(
     };
   }
 
+  if (query.promotionType === "ANY") {
+    where.promotionType = { not: "NONE" };
+  } else if (query.promotionType) {
+    where.promotionType = query.promotionType;
+  }
+
   if (query.q) {
     where.OR = [
       { productName: { contains: query.q, mode: "insensitive" } },
@@ -386,31 +415,17 @@ function serializeOffer(row: OfferRow): SerializedOffer {
     quantityValue: decimalToNumber(row.quantityValue),
     advertisedPriceAmount: decimalToNumber(row.advertisedPriceAmount),
     regularPriceAmount: decimalToNumber(row.regularPriceAmount),
+    promotionQuantity: row.promotionQuantity,
+    promotionTotalPrice: decimalToNumber(row.promotionTotalPrice),
+    promotionUnitPrice: decimalToNumber(row.promotionUnitPrice),
+    memberPriceAmount: decimalToNumber(row.memberPriceAmount),
+    nonMemberPriceAmount: decimalToNumber(row.nonMemberPriceAmount),
+    priceMinAmount: decimalToNumber(row.priceMinAmount),
+    priceMaxAmount: decimalToNumber(row.priceMaxAmount),
     unitPrice: decimalToNumber(row.unitPrice),
-    reviewReasons: Array.isArray(row.reviewReasons)
-      ? row.reviewReasons.filter((reason): reason is string => typeof reason === "string")
-      : [],
+    promotionConditions: toJsonObject(row.promotionConditions),
+    reviewReasons: toStringArray(row.reviewReasons),
   };
-}
-
-function decimalToNumber(
-  value: Prisma.Decimal | number | string | null,
-): number | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === "number") {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  const parsed = value.toNumber();
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function buildComparisonGroup(key: string, offers: SerializedOffer[]) {

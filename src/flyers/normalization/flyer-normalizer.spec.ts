@@ -70,6 +70,61 @@ describe("normalizeFlyerOffer", () => {
     expect(result.reviewReasons).toContain("MEMBER_PRICE");
     expect(result.reviewReasons).toContain("MULTI_VARIANT");
     expect(result.reviewReasons).toContain("NO_GTIN");
+    expect(result).toMatchObject({
+      promotionType: "MEMBER_PRICE",
+      memberProgram: "Scene+",
+      memberPriceAmount: 5.99,
+      nonMemberPriceAmount: 6.99,
+      conditionsText:
+        "200 Scene+ PTS when you buy 2 / Scene+ Member Pricing / $6.99 without Scene+ Card",
+    });
+    expect(result.promotionConditions).toMatchObject({
+      type: "MEMBER_PRICE",
+      requiresLoyaltyCard: true,
+    });
+  });
+
+  it("uses the multibuy per-item price for unit-price comparison", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Walmart",
+      flyer: {
+        ...flyer,
+        id: 8203652,
+        merchant: "Walmart",
+        merchant_id: 234,
+        name: "Flyer",
+      },
+      item: item({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade",
+        brand: "Gatorade",
+        price: "7.00",
+      }),
+      detail: detail({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade",
+        description: "591 mL",
+        price_text: "3 for $7",
+        disclaimer_text: null,
+        sale_story: null,
+        sku: null,
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      advertisedPriceAmount: 7,
+      promotionType: "MULTIBUY",
+      promotionQuantity: 3,
+      promotionTotalPrice: 7,
+      promotionUnitPrice: 2.3333,
+      unitPrice: 0.3948,
+      unitPriceBasis: "100ml",
+      status: "PENDING_REVIEW",
+    });
+    expect(result.reviewReasons).toContain("MULTIBUY");
   });
 
   it("normalizes a fixed-price multi-pack without a barcode", () => {

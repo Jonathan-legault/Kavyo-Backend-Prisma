@@ -55,8 +55,12 @@ One row per priced flyer item in an ingestion batch:
 - family and match keys
 - advertised price, regular price, pricing basis
 - member/multibuy/multi-variant/range flags
+- promotion type, quantity, total price, and per-item multibuy price
+- member/loyalty program name, member price, and non-member price
+- advertised price range minimum and maximum
+- human-readable conditions and machine-readable promotion conditions
 - unit price and unit-price basis
-- review status and reasons
+- review status, reasons, decision, notes, reviewer, and review timestamp
 - image/source URLs
 - normalized and raw JSON payloads
 
@@ -67,7 +71,9 @@ One row per priced flyer item in an ingestion batch:
 - Many flyer items are multi-variant, size ranges, member-only prices, or multi-buys.
 - Automatically merging those rows into a canonical product would fabricate precision that the source does not provide.
 
-`Product` and `PriceObservation` remain the canonical layer for reviewed, matched data. A later review workflow can promote a `StagedOffer` by setting `matchedProductId` or by creating a real product record with verified identifiers. Barcodes are never invented.
+`Product` and `PriceObservation` remain the canonical layer for reviewed, matched data. The admin review workflow promotes a `StagedOffer` by matching an existing product, creating a canonical product with a stable `catalogKey`, and optionally publishing a validated `PriceObservation`. Barcodes are optional and are never invented.
+
+A `catalogKey` is a stable, unique product identifier derived from the normalized match key (or a retailer/source-record fallback). Weekly reviews reuse the same product row instead of creating duplicate products. A reviewed offer may be approved without publishing a price when its promotion conditions are not representable in the canonical pricing model.
 
 ---
 
@@ -105,7 +111,29 @@ This avoids choosing a small seasonal or promotional flyer when the main weekly 
 
 - The advertised price comes from the flyer item's `price`.
 - `regularPriceAmount` is parsed from disclaimer text such as `$6.99 without Scene+ Card` or `Regular price $6.99`.
+- Price ranges are read from Flipp `current_price_range` or text such as `$4.99-$6.99` or `$4.99 to $6.99`.
 - Prices are stored in CAD.
+
+### Promotion Conditions
+
+Promotion parsing records the original condition text and structured flags on `StagedOffer`:
+
+| Condition | Stored fields |
+| --- | --- |
+| Multibuy (`3 for $7`, `2/$5`, `$5 for 2`) | `promotionType=MULTIBUY`, `promotionQuantity`, `promotionTotalPrice`, `promotionUnitPrice` |
+| Per-item quantity threshold (`$5.99 ea when you buy 2 or more`) | `promotionType=MULTIBUY`, `promotionQuantity`, `promotionUnitPrice`, `promotionConditions.quantityRequirement` |
+| Quantity requirement without a multibuy price (`when you buy 2`) | `promotionQuantity`, review flag `QUANTITY_REQUIREMENT` |
+| Member/loyalty price | `promotionType=MEMBER_PRICE`, `memberProgram`, `memberPriceAmount`, `nonMemberPriceAmount` |
+| Price range | `promotionType=PRICE_RANGE`, `priceMinAmount`, `priceMaxAmount` |
+| BOGO | `promotionType=BOGO` |
+| Minimum spend | `promotionType=SPEND_THRESHOLD`, `promotionConditions.minSpend` |
+| Purchase limit | `promotionType=PURCHASE_LIMIT`, `promotionConditions.purchaseLimit` |
+| Coupon | `promotionConditions.requiresCoupon`, review flag `COUPON_REQUIRED` |
+| Points | `promotionType=POINTS_OFFER` or a higher-priority condition type, plus review flag `POINTS_OFFER` |
+| In-store only | `promotionType=IN_STORE_ONLY` or `promotionConditions.inStoreOnly` |
+| Unresolved offer language | `promotionType=OTHER`, review flag `PROMOTION_AMBIGUOUS` |
+
+Multibuy unit prices are used for unit-price comparison, but they are not published as single-unit shelf prices without an explicit administrator decision. Member prices are preserved but are not treated as general sale prices. This avoids recommending a price that requires a membership, a coupon, a minimum spend, or a quantity the shopper may not purchase.
 
 ### Package Size
 
@@ -145,7 +173,7 @@ Families are used only for **similar-product** discovery. They are not a claim t
 - normalized product name
 - parsed quantity and unit
 
-It is only generated when the offer is not a multi-variant or size-range offer. Exact comparison groups by this key.
+It is only generated when the offer is not a multi-variant, size-range, or price-range offer. Exact comparison groups by this key.
 
 ### Review Flags
 
@@ -160,8 +188,16 @@ Offers are marked `PENDING_REVIEW` when any blocking condition applies:
 | `MULTIBUY` | Price depends on buying multiple units |
 | `PRICE_BY_WEIGHT` | Price is per lb/kg or sold by 100 g |
 | `MEMBER_PRICE` | Price requires a membership/loyalty card |
+| `PRICE_RANGE` | Advertised price is a range; a single price must be resolved |
+| `BOGO` | Buy-one-get-one offer |
+| `SPEND_THRESHOLD` | Offer depends on a minimum spend |
+| `PURCHASE_LIMIT` | Offer has a per-customer purchase limit |
+| `QUANTITY_REQUIREMENT` | Offer requires a quantity but the price effect is not a simple multibuy |
+| `COUPON_REQUIRED` | Offer requires a coupon or promo code |
+| `FREE_ITEM` | Offer includes a free item |
+| `PROMOTION_AMBIGUOUS` | Promotion language is not fully resolved |
 
-`NO_GTIN` is informational: the offer has no usable 8–14 digit GTIN candidate. It does not block normalization by itself.
+`NO_GTIN` and `POINTS_OFFER` are informational: they do not block normalization by themselves. `NO_GTIN` means the offer has no usable 8–14 digit GTIN candidate; `POINTS_OFFER` means the offer mentions points but the points value is not part of the price calculation.
 
 Only `NORMALIZED` offers are used by default. Use `status=ALL` to inspect or compare pending offers, and keep the review flags visible in the UI.
 
@@ -221,6 +257,7 @@ Query parameters:
 - `retailer`: retailer name (case-insensitive substring)
 - `family`: exact family key
 - `status`: `NORMALIZED` (default), `PENDING_REVIEW`, or `ALL`
+- `promotionType`: `NONE`, `MULTIBUY`, `MEMBER_PRICE`, `PRICE_RANGE`, `BOGO`, `SPEND_THRESHOLD`, `PURCHASE_LIMIT`, `IN_STORE_ONLY`, `POINTS_OFFER`, `OTHER`, or `ANY` for any non-`NONE` promotion
 - `sort`: `unitPrice`, `price`, or `name`
 - `batchId`: optional UUID for a specific batch
 - `limit`: 1–200, default 100
@@ -270,15 +307,91 @@ Each group includes the cheapest offer per retailer, retailer count, `hasCompari
 
 ---
 
+## Admin Review Workflow
+
+Admin routes require a JWT whose roles include `ADMIN` or `SUPER_ADMIN`.
+
+### Queue
+
+```http
+GET /admin/flyer-offers?status=PENDING_REVIEW&q=butter&limit=50
+```
+
+The queue defaults to the latest completed Flipp batch. Query parameters:
+
+- `status`: `PENDING_REVIEW`, `NORMALIZED`, `REJECTED`, or `ALL`
+- `q`: search product name, brand, family, or package size
+- `retailer`: retailer name substring
+- `batchId`: review a specific batch
+- `limit`: 1–200, default 50
+- `offset`: zero-based offset
+
+The response includes the batch ID, filtered count, status counts for the batch, and serialized offers with promotion conditions, review reasons, flyer metadata, retailer, matched product, and reviewer.
+
+### Summary
+
+```http
+GET /admin/flyer-offers/summary
+```
+
+Returns total, pending, normalized, and rejected counts, plus breakdowns by status, promotion type, and review decision. Pass `?batchId=<uuid>` to inspect an earlier batch.
+
+### Get one offer
+
+```http
+GET /admin/flyer-offers/{offerId}
+```
+
+### Review an offer
+
+```http
+PATCH /admin/flyer-offers/{offerId}/review
+Authorization: Bearer <ADMIN_JWT>
+Content-Type: application/json
+
+{
+  "decision": "APPROVE",
+  "createProduct": true,
+  "catalogKey": "FLIPP|quality-street|tin|650g",
+  "storeId": "2d08df42-04ee-4c82-bcaa-9818dfea239f",
+  "publishPrice": true,
+  "unitPrice": 12.99,
+  "notes": "Resolved price range from shelf check"
+}
+```
+
+Decisions:
+
+- `APPROVE`: resolve the canonical product, optionally publish a price observation, then mark the offer `NORMALIZED`.
+- `REJECT`: mark the offer `REJECTED` with no product or price publication.
+- `NEEDS_INFO`: keep the offer `PENDING_REVIEW` and record the reviewer note.
+
+Approval behavior:
+
+- If `productId` is supplied, that product is used.
+- Otherwise, an existing `matchedProductId`, barcode, or `catalogKey` match is reused.
+- If no product exists, `createProduct: true` is required. The product receives the supplied `catalogKey`, or a key generated from a stable match key. Offers without a stable match key require an explicit `catalogKey`; `barcode` remains optional.
+- Multi-variant offers must supply an explicit `productId`; they cannot be auto-created from ambiguous flyer text.
+- Price publication is opt-in with `publishPrice: true` and requires `storeId` belonging to the offer retailer.
+- `unitPrice` overrides the parsed advertised or multibuy per-item price.
+- Price ranges, multi-variant offers, and ambiguous `OTHER` offers require an explicit `unitPrice`.
+- Member-only, multibuy, BOGO, free-item, coupon, and minimum-spend offers cannot be published as general sale prices yet. They can still be approved as catalogue products without a price observation.
+- Re-reviewing the same offer updates the existing source-linked price observation instead of creating a duplicate.
+- Rejecting or returning a previously approved offer to `NEEDS_INFO` withdraws its published price observation.
+
+---
+
 ## Example
 
-The first successful run on 2026-10-30 produced:
+The latest run on 2026-11-10 produced:
 
-- Safeway flyer `8205958`: 288 priced items, 103 normalized
-- Walmart flyer `8203652`: 352 priced items, 86 normalized
-- Calgary Co-op flyer `8195613`: 105 priced items, 25 normalized
-- Total: 745 staged offers, 214 normalized, 531 pending review
-- One exact cross-retailer match in the normalized set: `Quality Street Tin 650g`
+- Safeway flyer `8212267`: 272 priced items, 82 normalized
+- Walmart flyer `8215609`: 441 priced items, 143 normalized
+- Calgary Co-op flyer `8211213`: 103 priced items, 15 normalized
+- Total: 816 staged offers, 240 normalized, 576 pending review
+- Promotion breakdown: 686 `NONE`, 80 `POINTS_OFFER`, 25 `OTHER`, 10 `SPEND_THRESHOLD`, 8 `MEMBER_PRICE`, 6 `MULTIBUY`, 1 `PURCHASE_LIMIT`
+
+The first successful run on 2026-10-30 produced 745 staged offers: 214 normalized and 531 pending review.
 
 These counts are a snapshot, not a guarantee; flyers change weekly.
 
@@ -291,7 +404,8 @@ These counts are a snapshot, not a guarantee; flyers change weekly.
 - **Package sizes are extracted from text.** Descriptions are inconsistent; ranges and multi-variant offers remain approximate and are flagged.
 - **Per-weight produce cannot be priced as a fixed basket item.** It is stored with a per-100 g unit price and marked for review.
 - **Family comparison is broad.** `produce|100g` can contain unrelated produce items. It is not an exact-match substitute.
-- **No automatic promotion to products.** A human or a future admin workflow must review ambiguous offers before they become canonical `Product`/`PriceObservation` records.
+- **Promotion-aware basket pricing is not implemented.** Member-only, multibuy, BOGO, coupon, and minimum-spend prices are preserved and reviewed but are not published as general sale prices. The basket engine still compares single-unit, non-member prices.
+- **Review is manual.** The admin queue can approve, reject, or request more information, but product identity and ambiguous promotion resolution still require a human decision.
 - **Source terms.** Production use of Flipp's JSON endpoints requires a terms-of-use review.
 
 ---
@@ -301,18 +415,21 @@ These counts are a snapshot, not a guarantee; flyers change weekly.
 The Kavyo frontend exposes the flyer surface at `/flyers`. The page:
 
 - loads the latest batch summary and the lowest unit-price normalized offers
+- shows a **Promotion watch** strip built from `status=ALL&promotionType=MULTIBUY|MEMBER_PRICE|PRICE_RANGE|ANY`, with a worked `2 for $5.00 → $2.50 each` example
 - searches `/flyers/offers` as the user types a submitted query
 - shows `/flyers/compare?mode=EXACT` separately as **exact product matches**
 - shows `/flyers/compare?mode=FAMILY` as **similar products**, with the API's comparison note
 - exposes a **Verified prices** / **Include review items** switch and labels `PENDING_REVIEW` offers
+- renders promotion quantity, total price, per-item price, member/non-member price, price range, and conditions on offer and comparison cards
 - keeps `q`, `retailer`, and `status` in the URL so a search can be shared or revisited
 
 Example: `/flyers?q=cheese&status=ALL&retailer=Safeway`.
 
-The flyer page is still a separate discovery/comparison surface. The basket comparison uses the five verified backend fixture products until reviewed flyer offers are promoted into `Product`/`PriceObservation` records or the basket flow explicitly supports staged offers.
+The flyer page is still a separate discovery/comparison surface. The basket comparison uses canonical `Product`/`PriceObservation` records. Reviewed, unambiguous offers can now be promoted through the admin API, but the frontend still needs a review console and promotion-aware basket behavior.
 
 Remaining integration work:
 
-1. Add an admin/review path for promoting reviewed, unambiguous offers.
+1. Build the admin review console on top of `/admin/flyer-offers`.
 2. Let the basket builder add a staged flyer offer without pretending it is a canonical product.
-3. Keep unresolved member, multibuy, range, and variant offers visibly labelled.
+3. Add member-aware and multibuy-aware basket pricing before publishing those offers as general prices.
+4. Keep unresolved member, multibuy, range, and variant offers visibly labelled.

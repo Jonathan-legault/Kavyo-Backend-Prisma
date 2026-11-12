@@ -2,7 +2,7 @@
 
 Kavyo is a Calgary-focused grocery decision platform prototype.
 
-The backend supports product and store data, grocery pricing, user accounts, user preferences, basket comparison, promotion handling, and future route-aware grocery recommendations.
+The backend supports product and store data, grocery pricing, user accounts, user preferences, basket comparison, structured flyer-promotion review, and route-aware grocery recommendations.
 
 The goal is to help users determine whether they should:
 
@@ -11,7 +11,7 @@ The goal is to help users determine whether they should:
 - make a second stop
 - split a grocery basket between stores
 
-Recommendations currently combine grocery prices with an estimated driving cost. Future iterations will add promotions, travel time, transit/walking modes, and multi-store split recommendations.
+Recommendations currently combine grocery prices with an estimated driving cost. Flyer promotions are captured and reviewed, but member-aware and multibuy-aware basket pricing, travel time, transit/walking modes, multi-store split recommendations, and multi-stop optimization remain future work.
 
 ---
 
@@ -24,7 +24,7 @@ The backend currently includes:
 - Prisma ORM and migrations
 - database seed data
 - 3 retailers
-- 3 Calgary test stores
+- 3 Calgary test stores in the portable fixture
 - 5 verified test products
 - 15 verified price observations
 - user registration
@@ -42,15 +42,23 @@ The backend currently includes:
 - basket price comparison with sale/regular price handling
 - travel-cost estimation and cheapest-store recommendation
 - weekly flyer ingestion from Flipp for Safeway, Walmart, and Calgary Co-op
-- staged flyer offers with package-size, unit-price, and review-flag normalization
+- staged flyer offers with package-size, unit-price, promotion, and review-flag normalization
+- structured promotion conditions for multibuys, member/loyalty pricing, price ranges, BOGO/free-item offers, purchase limits, spend thresholds, coupons, points, and in-store-only offers
 - flyer offer listing, summary, exact-match, and similar-product comparison APIs
+- protected admin flyer-review queue with approval, rejection, and needs-info decisions
+- review approval workflow that can upsert a canonical product and publish a validated price observation
+- stable `catalogKey` and optional barcode support for idempotent flyer-derived products
 - DTO validation
 - authentication and authorization error handling
-- 50 unit tests using Vitest
-- 31 end-to-end tests using Vitest and Supertest
+- 68 unit tests using Vitest
+- 40 end-to-end tests using Vitest and Supertest
 - Postman requests for authentication, user, and basket API testing
 
 Basket comparison and travel-aware recommendations are implemented for a single store. Split-basket and multi-stop optimization remain future work.
+
+A team member has prepared a verified 95-location Calgary retail dataset with latitude and longitude. It is not yet applied to this repository's local database; the portable fixture still contains three stores so tests remain reproducible. The store comparison engine already reads active `Store` rows, so the larger dataset can be loaded without changing the comparison contract.
+
+
 
 A larger local Open Food Facts development dataset containing approximately 62,575 products is also used during development.
 
@@ -117,13 +125,23 @@ kavyo-backend/
 │   │   ├── quick-compare.service.ts
 │   │   └── comparison.service.ts
 │   │
+│   ├── admin/
+│   │   ├── dto/
+│   │   ├── admin-flyer-offers.controller.ts
+│   │   ├── admin-flyer-offers.service.ts
+│   │   └── admin.module.ts
+│   │
 │   ├── flyers/
 │   │   ├── dto/
 │   │   ├── flipp/
 │   │   ├── ingestion/
 │   │   ├── normalization/
+│   │   │   ├── flyer-normalizer.ts
+│   │   │   ├── package-size.ts
+│   │   │   └── promotion.ts
 │   │   ├── flyers.controller.ts
 │   │   ├── flyers.module.ts
+│   │   ├── offer-utils.ts
 │   │   └── flyers.service.ts
 │   │
 │   ├── prisma/
@@ -137,11 +155,13 @@ kavyo-backend/
 │   └── main.ts
 │
 ├── test/
+│   ├── admin-flyer-offers.e2e-spec.ts
 │   ├── app.e2e-spec.ts
 │   └── basket.e2e-spec.ts
 │
 ├── docs/
-│   └── flyer-ingestion.md
+│   ├── flyer-ingestion.md
+│   └── task-5-6-status.md
 │
 ├── scripts/
 │   └── ingest-flyers.ts
@@ -660,11 +680,11 @@ npm run test:e2e
 Current result:
 
 ```text
-50 unit tests passing
-31 end-to-end tests passing
+68 unit tests passing
+40 end-to-end tests passing
 ```
 
-Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, numeric parsing, flyer package-size parsing, unit-price conversion, multi-pack and range handling, member-price detection, and flyer offer normalization.
+Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, numeric parsing, flyer package-size parsing, unit-price conversion, multi-pack and range handling, promotion parsing (multibuy, member/loyalty, price range, BOGO, limits, spend thresholds, coupons, points), member-price detection, and flyer offer normalization.
 
 The current E2E suite verifies:
 
@@ -691,8 +711,14 @@ The current E2E suite verifies:
 - stateless `POST /basket/compare`
 - postal-code validation
 - rejection of a persisted comparison without a postal code
+- admin review-queue authentication and role protection
+- admin approval creating a canonical product and validated price observation
+- admin rejection without publishing a price
+- opt-in price publication and catalogue-only approval
+- canonical product reuse across weekly offers
+- refusal to publish member-only, multibuy, or unresolved multi-variant offers
 
-Test accounts and baskets created during the E2E suite are removed after testing.
+Test accounts, baskets, flyers, staged offers, and canonical products created during the E2E suite are removed after testing.
 
 ---
 
@@ -757,26 +783,35 @@ These two files serve different purposes and should not be treated as the same d
 
 ---
 
-## Promotion Model - Planned
+## Promotion Model
 
-The current pricing model supports regular and sale prices.
+The canonical pricing model still stores regular and sale prices. Flyer-derived promotion conditions are captured on `StagedOffer` before a human review promotes an offer.
 
-Future promotion handling will require structured conditions including:
+Structured promotion fields include:
 
-- `QUANTITY_LIMIT`
-- `MEMBER_PRICE`
-- `LOYALTY_CARD`
-- `MULTI_BUY`
-- `BOGO`
-- `MINIMUM_SPEND`
-- `APP_OFFER`
+- `promotionType`: `NONE`, `MULTIBUY`, `MEMBER_PRICE`, `PRICE_RANGE`, `BOGO`, `SPEND_THRESHOLD`, `PURCHASE_LIMIT`, `IN_STORE_ONLY`, `POINTS_OFFER`, or `OTHER`
+- `promotionQuantity`, `promotionTotalPrice`, and `promotionUnitPrice` for multibuys
+- `memberProgram`, `memberPriceAmount`, and `nonMemberPriceAmount` for member/loyalty pricing
+- `priceMinAmount` and `priceMaxAmount` for advertised ranges
+- `conditionsText` and `promotionConditions` for the original conditions and machine-readable flags
+- review audit fields: `reviewDecision`, `reviewNotes`, `reviewedAt`, and `reviewedByUserId`
 
-`MULTI_BUY` will need to distinguish between:
+Supported condition parsing includes:
 
-- `PRO_RATA`
-- `THRESHOLD_REQUIRED`
+- multibuy forms such as `3 for $7`, `2/$5`, and `$5 for 2`
+- member/loyalty programs such as Scene+, PC Optimum, Air Miles, and More Rewards
+- ranges from flyer text and Flipp `current_price_range`
+- BOGO and free-item offers
+- purchase limits such as `limit 4`
+- minimum-spend thresholds
+- quantity requirements such as `when you buy 2` or `$5.99 ea when you buy 2 or more`
+- coupon, points, and in-store-only conditions
 
-Promotion-condition support is planned for a later backend milestone.
+`StagedOffer` remains the audit record. The protected admin review workflow can approve, reject, or request more information, create or match a canonical `Product`, and publish a validated `PriceObservation`. Products derived from flyers use a stable `catalogKey` so weekly runs reuse the same product instead of duplicating it; barcodes remain optional and are never invented.
+
+Price publishing is opt-in (`publishPrice: true`) and is blocked for member-only, multibuy, BOGO, free-item, coupon, and minimum-spend offers until the basket engine can represent those conditions. Price-range, multi-variant, and otherwise ambiguous offers require an explicit resolved `unitPrice`. Multi-variant offers also require an explicit `productId`. Rejecting a previously approved offer withdraws its published price.
+
+See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md) for the full review workflow and payload examples.
 
 ---
 
@@ -810,24 +845,29 @@ Promotion-condition support is planned for a later backend milestone.
 - cheapest complete-store recommendation
 - `STAY` / `SWITCH` baseline-store comparison
 - Flipp flyer ingestion for Safeway, Walmart, and Calgary Co-op
-- staged flyer offers with package-size and unit-price normalization
-- review flags for member, multibuy, range, variant, and weight-based prices
+- staged flyer offers with package-size, unit-price, and promotion normalization
+- structured promotion conditions for member, multibuy, range, BOGO, limit, spend, coupon, points, and in-store flags
+- review flags for ambiguous or unsupported pricing
 - exact-product and similar-product flyer comparison APIs
+- protected admin flyer-review queue and summary endpoints
+- approval workflow with canonical product upsert and validated price publication
+- stable flyer product keys and optional barcodes
 - automated authentication/user E2E tests
 - automated basket comparison E2E tests
-- automated flyer normalization tests
+- automated admin review E2E tests
+- automated flyer normalization and promotion parser tests
 - Postman authentication/user testing
 
 ### Next Backend Milestones
 
-1. Admin review/promotion workflow for staged flyer offers
+1. Member-aware and multibuy-aware basket pricing
 2. Wire reviewed flyer offers into the frontend basket flow
-3. Product and price APIs
-4. Promotion-condition model
+3. Product and price APIs for reviewed offers
+4. Import and validate the team's 95-location Calgary store dataset
 5. Transit, walking, and cycling travel modes
 6. Route-aware travel time and multi-stop optimization
 7. Split-basket recommendation
-8. Administrative APIs and analytics
+8. Administrative analytics and operational tooling
 
 ---
 
@@ -863,21 +903,34 @@ The command creates a new `IngestBatch`, one `Flyer` row per retailer flyer, and
 ```text
 GET /flyers/summary
 GET /flyers/offers?q=butter&status=NORMALIZED
+GET /flyers/offers?status=ALL&promotionType=ANY
 GET /flyers/compare?q=Quality%20Street&mode=EXACT
 GET /flyers/compare?q=butter&mode=FAMILY&status=ALL
 ```
+
+Reviewed offers can be promoted through protected admin endpoints:
+
+```text
+GET   /admin/flyer-offers
+GET   /admin/flyer-offers/summary
+GET   /admin/flyer-offers/:id
+PATCH /admin/flyer-offers/:id/review
+```
+
+The review endpoint accepts `APPROVE`, `REJECT`, or `NEEDS_INFO`. Approval can match an existing product, create a canonical product with `createProduct: true`, and publish a price observation with `publishPrice: true`. Price publication is opt-in and requires a `storeId`; ambiguous or unsupported promotions are rejected until an administrator resolves them. See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
 
 Comparison policy:
 
 - `mode=EXACT` groups only offers with the same normalized brand/product name and package size. Use it for direct product substitutions.
 - `mode=FAMILY` groups offers by grocery family and unit-price basis. These are similar products, not guaranteed identical items; label them clearly in the frontend.
 - `status=NORMALIZED` (the default) excludes offers with blocking review flags such as member-only pricing, multi-buys, size ranges, and multi-variants. `status=ALL` exposes those rows with their review reasons intact.
+- `promotionType` filters promotional rows by type; use `promotionType=ANY` to return every offer whose type is not `NONE`.
 
-The first successful run on 2026-10-30 staged **745 offers**: 214 `NORMALIZED` and 531 `PENDING_REVIEW`, across all three retailers. These counts change with each flyer cycle.
+The latest run on 2026-11-10 staged **816 offers**: 240 `NORMALIZED` and 576 `PENDING_REVIEW`, across all three retailers. The first successful run on 2026-10-30 staged 745 offers. These counts change with each flyer cycle.
 
-The frontend discovery surface is `/flyers`. It searches the latest batch, shows exact matches separately from similar products, keeps review flags visible, and stores the search in the URL (`/flyers?q=cheese&status=ALL`).
+The frontend discovery surface is `/flyers`. It searches the latest batch, shows exact matches separately from similar products, keeps review flags visible, and stores the search in the URL (`/flyers?q=cheese&status=ALL`). A **Promotion watch** strip loads multibuy, member-price, price-range, and other promotional rows even when the default view is limited to verified prices. Promotion cards show the advertised deal, quantity requirement, per-item calculation (for example, `2 for $5.00` → `$2.50 each`), member/non-member prices, and conditions.
 
-The existing basket comparison still uses the five verified fixture products. Flyer offers remain a separate discovery/comparison surface until reviewed offers are promoted into `Product`/`PriceObservation` records or the basket flow explicitly supports staged offers.
+The basket comparison uses canonical `Product`/`PriceObservation` records. Flyer offers remain a separate discovery/comparison surface until an administrator promotes them, or the basket flow explicitly supports staged offers. Approved, unambiguous offers can now publish validated price observations for a selected store; member-only and multibuy offers remain staged until member-aware and quantity-aware pricing is implemented.
 
 **Source terms:** confirm Flipp and retailer terms of use before production use. The ingester uses rate limiting and does not bypass access controls.
 
