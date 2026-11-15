@@ -4,11 +4,17 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 
-const baseUrl = process.env.DATABASE_URL;
+function requireDatabaseUrl(): string {
+    const value = process.env.DATABASE_URL;
 
-if (!baseUrl) {
-    throw new Error('DATABASE_URL is missing');
+    if (!value) {
+        throw new Error('DATABASE_URL is missing');
+    }
+
+    return value;
 }
+
+const baseUrl: string = requireDatabaseUrl();
 
 const databases = ['kavyo_dev', 'kavyo_phase_b_test'] as const;
 

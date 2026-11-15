@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchProduct, type ExistingProductIdentity } from './product-matcher';
+import { matchProduct, type ExistingProductIdentity } from './product-matcher.js';
 
 const product = (patch: Partial<ExistingProductIdentity> = {}): ExistingProductIdentity => ({
   id:'product-1', productName:'Acme Rice', brand:'Acme', barcode:null,
