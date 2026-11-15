@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import type { Prisma } from "../generated/prisma/client.js";
 import { FLYER_SOURCE_SYSTEM_NAME } from "../flyers/ingestion/retailers.js";
 import {
@@ -72,6 +73,8 @@ const ADMIN_OFFER_SELECT = {
       id: true,
       externalId: true,
       name: true,
+      postalCode: true,
+      retailerId: true,
       sourceUrl: true,
       validFrom: true,
       validUntil: true,
@@ -234,7 +237,7 @@ export class AdminFlyerOffersService {
 
     if (dto.decision === "REJECT") {
       const updated = await this.prisma.$transaction(async (tx) => {
-        await withdrawPublishedPrice(tx, offer);
+        await withdrawPublishedData(tx, offer);
 
         return tx.stagedOffer.update({
           where: { id },
@@ -259,7 +262,7 @@ export class AdminFlyerOffersService {
 
     if (dto.decision === "NEEDS_INFO") {
       const updated = await this.prisma.$transaction(async (tx) => {
-        await withdrawPublishedPrice(tx, offer);
+        await withdrawPublishedData(tx, offer);
 
         return tx.stagedOffer.update({
           where: { id },
@@ -291,10 +294,35 @@ export class AdminFlyerOffersService {
   ) {
     return this.prisma.$transaction(async (tx) => {
       const product = await resolveProduct(tx, offer, dto);
-      const priceObservation =
-        dto.publishPrice === true
-          ? await publishPriceObservation(tx, offer, product.id, dto)
-          : null;
+      // Reviewing an offer is the point at which it becomes reusable by the
+      // catalogue and basket. It is published as a retailer-level advertised
+      // estimate; the stricter store-level PriceObservation remains opt-in.
+      const advertisedOffer = await publishAdvertisedOffer(
+        tx,
+        offer,
+        product.id,
+        dto.unitPrice,
+      );
+      let priceObservation: Awaited<
+        ReturnType<typeof publishPriceObservation>
+      > | null = null;
+      if (dto.publishPrice === true) {
+        priceObservation = await publishPriceObservation(
+          tx,
+          offer,
+          product.id,
+          dto,
+        );
+      } else {
+        // Re-approving as catalogue-only must not leave an older store price
+        // published from the same source record.
+        await tx.priceObservation.deleteMany({
+          where: {
+            sourceSystemId: offer.sourceSystemId,
+            sourceRecordId: offer.sourceRecordId,
+          },
+        });
+      }
 
       const updated = await tx.stagedOffer.update({
         where: { id: offer.id },
@@ -320,6 +348,7 @@ export class AdminFlyerOffersService {
           productName: product.productName,
           brand: product.brand,
         },
+        advertisedOffer,
         priceObservation,
       };
     });
@@ -597,16 +626,180 @@ function buildCatalogKey(offer: AdminOfferRow): string | null {
   return `FLIPP|${offer.matchKey}`.slice(0, 300);
 }
 
-async function withdrawPublishedPrice(
+async function publishAdvertisedOffer(
   tx: Prisma.TransactionClient,
   offer: AdminOfferRow,
-): Promise<void> {
-  await tx.priceObservation.deleteMany({
+  productId: string,
+  resolvedUnitPrice?: number,
+) {
+  const retailerId = offer.retailerId ?? offer.flyer.retailerId;
+
+  if (!retailerId) {
+    throw new BadRequestException(
+      "The offer has no retailer, so it cannot be published to the catalogue.",
+    );
+  }
+
+  const promotionConditions = toJsonObject(offer.promotionConditions) ?? {};
+  const reviewReasons = toStringArray(offer.reviewReasons);
+  const marketKey = normalizeMarketKey(offer.flyer.postalCode);
+  const advertisedPrice =
+    resolvedUnitPrice ??
+    decimalToNumber(offer.promotionUnitPrice) ??
+    decimalToNumber(offer.advertisedPriceAmount);
+
+  const conditionEvidence = {
+    ...promotionConditions,
+    stagedOfferId: offer.id,
+    isMemberPrice: offer.isMemberPrice,
+    isMultibuy: offer.isMultibuy,
+    isPriceRange: offer.isPriceRange,
+    isMultiVariant: offer.isMultiVariant,
+    promotionType: offer.promotionType,
+    pricingBasis: offer.pricingBasis,
+    promotionQuantity: decimalToNumber(offer.promotionQuantity),
+    promotionTotalPrice: decimalToNumber(offer.promotionTotalPrice),
+    promotionUnitPrice: decimalToNumber(offer.promotionUnitPrice),
+    conditionsText: offer.conditionsText,
+    reviewedReviewReasons: reviewReasons,
+    reviewReasons: [],
+  };
+
+  const stableKey = advertisedOfferStableKey({
+    sourceSystemId: offer.sourceSystemId,
+    sourceRecordId: offer.sourceRecordId,
+    retailerId,
+    flyerExternalId: offer.flyer.externalId,
+    marketKey,
+    productId,
+    validFrom: offer.validFrom,
+    validUntil: offer.validUntil,
+  });
+
+  const data = {
+    sourceSystemId: offer.sourceSystemId,
+    retailerId,
+    storeId: null,
+    productId,
+    flyerId: offer.flyer.id,
+    flyerExternalId: offer.flyer.externalId,
+    sourceRecordId: offer.sourceRecordId,
+    marketKey,
+    productName: offer.productName,
+    packageSizeText: offer.packageSizeText,
+    advertisedPriceAmount: advertisedPrice,
+    regularPriceAmount: decimalToNumber(offer.regularPriceAmount),
+    currency: offer.currency,
+    promotionText: offer.promotionText,
+    conditionEvidence,
+    sourceUrl: offer.sourceUrl ?? offer.flyer.sourceUrl,
+    rawPayload: {
+      stagedOfferId: offer.id,
+      matchKey: offer.matchKey,
+      familyKey: offer.familyKey,
+    },
+    observedAt: offer.observedAt,
+    validFrom: offer.validFrom,
+    validUntil: offer.validUntil,
+    lastSeenAt: new Date(),
+  };
+
+  // A re-review can change the linked product, market, or validity window,
+  // which changes the stable key. Remove the previous published row so one
+  // staged offer never leaves multiple current advertised offers behind.
+  await tx.advertisedOffer.deleteMany({
     where: {
       sourceSystemId: offer.sourceSystemId,
       sourceRecordId: offer.sourceRecordId,
+      stableKey: { not: stableKey },
     },
   });
+
+  const advertisedOffer = await tx.advertisedOffer.upsert({
+    where: { stableKey },
+    update: data,
+    create: { stableKey, ...data },
+    select: {
+      id: true,
+      stableKey: true,
+      productId: true,
+      marketKey: true,
+      advertisedPriceAmount: true,
+      currency: true,
+      observedAt: true,
+      validFrom: true,
+      validUntil: true,
+    },
+  });
+
+  return {
+    id: advertisedOffer.id,
+    stableKey: advertisedOffer.stableKey,
+    productId: advertisedOffer.productId,
+    marketKey: advertisedOffer.marketKey,
+    advertisedPrice: decimalToNumber(
+      advertisedOffer.advertisedPriceAmount,
+    ),
+    currency: advertisedOffer.currency,
+    observedAt: advertisedOffer.observedAt,
+    validFrom: advertisedOffer.validFrom,
+    validUntil: advertisedOffer.validUntil,
+  };
+}
+
+function advertisedOfferStableKey(input: {
+  sourceSystemId: string;
+  sourceRecordId: string;
+  retailerId: string;
+  flyerExternalId: string;
+  marketKey: string;
+  productId: string;
+  validFrom: Date | null;
+  validUntil: Date | null;
+}): string {
+  return createHash("sha256")
+    .update(
+      [
+        "advertised-offer",
+        input.sourceSystemId,
+        input.sourceRecordId,
+        input.retailerId,
+        input.flyerExternalId,
+        input.marketKey,
+        input.productId,
+        input.validFrom?.toISOString() ?? "",
+        input.validUntil?.toISOString() ?? "",
+      ].join("|"),
+    )
+    .digest("hex");
+}
+
+function normalizeMarketKey(postalCode: string | null): string {
+  const normalized = (postalCode ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+  return normalized || "UNKNOWN";
+}
+
+async function withdrawPublishedData(
+  tx: Prisma.TransactionClient,
+  offer: AdminOfferRow,
+): Promise<void> {
+  await Promise.all([
+    tx.priceObservation.deleteMany({
+      where: {
+        sourceSystemId: offer.sourceSystemId,
+        sourceRecordId: offer.sourceRecordId,
+      },
+    }),
+    tx.advertisedOffer.deleteMany({
+      where: {
+        sourceSystemId: offer.sourceSystemId,
+        sourceRecordId: offer.sourceRecordId,
+      },
+    }),
+  ]);
 }
 
 function serializeAdminOffer(row: AdminOfferRow) {

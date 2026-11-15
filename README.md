@@ -11,7 +11,7 @@ The goal is to help users determine whether they should:
 - make a second stop
 - split a grocery basket between stores
 
-Recommendations currently combine grocery prices with an estimated driving cost. Flyer promotions are captured and reviewed, but member-aware and multibuy-aware basket pricing, travel time, transit/walking modes, multi-store split recommendations, and multi-stop optimization remain future work.
+Recommendations currently combine grocery prices with an estimated driving cost. Reviewed flyer offers can contribute retailer-level estimates to the basket, while store-verified price observations take priority. Member-aware pricing, true quantity-aware multibuy checkout, travel time, transit/walking modes, multi-store split recommendations, and multi-stop optimization remain future work.
 
 ---
 
@@ -46,17 +46,21 @@ The backend currently includes:
 - structured promotion conditions for multibuys, member/loyalty pricing, price ranges, BOGO/free-item offers, purchase limits, spend thresholds, coupons, points, and in-store-only offers
 - flyer offer listing, summary, exact-match, and similar-product comparison APIs
 - protected admin flyer-review queue with approval, rejection, and needs-info decisions
-- review approval workflow that can upsert a canonical product and publish a validated price observation
+- review approval workflow that upserts a canonical product and a retailer-level advertised offer, with optional store-level price observation publication
 - stable `catalogKey` and optional barcode support for idempotent flyer-derived products
+- public product catalogue API with search, category, retailer, pagination, and current flyer-estimate metadata
+- basket pricing that distinguishes store-verified observations from retailer-level advertised estimates
 - DTO validation
 - authentication and authorization error handling
-- 68 unit tests using Vitest
-- 40 end-to-end tests using Vitest and Supertest
+- 77 unit tests using Vitest
+- 48 end-to-end tests using Vitest and Supertest
 - Postman requests for authentication, user, and basket API testing
 
 Basket comparison and travel-aware recommendations are implemented for a single store. Split-basket and multi-stop optimization remain future work.
 
 A team member has prepared a verified 95-location Calgary retail dataset with latitude and longitude. It is not yet applied to this repository's local database; the portable fixture still contains three stores so tests remain reproducible. The store comparison engine already reads active `Store` rows, so the larger dataset can be loaded without changing the comparison contract.
+
+The local `kavyo_dev` database also contains the product-contract handoff data: 227 products (214 active), 351 advertised offers, and a staged flyer backlog. Staged offers are not published automatically. They must be reviewed, linked to a canonical product, and approved before they can affect the catalogue or basket; offers without a linked product or with an expired validity window are ignored by pricing.
 
 
 
@@ -144,6 +148,12 @@ kavyo-backend/
 │   │   ├── offer-utils.ts
 │   │   └── flyers.service.ts
 │   │
+│   ├── products/
+│   │   ├── dto/
+│   │   ├── products.controller.ts
+│   │   ├── products.module.ts
+│   │   └── products.service.ts
+│   │
 │   ├── prisma/
 │   │   ├── prisma.module.ts
 │   │   └── prisma.service.ts
@@ -156,8 +166,10 @@ kavyo-backend/
 │
 ├── test/
 │   ├── admin-flyer-offers.e2e-spec.ts
+│   ├── advertised-offer-basket.e2e-spec.ts
 │   ├── app.e2e-spec.ts
-│   └── basket.e2e-spec.ts
+│   ├── basket.e2e-spec.ts
+│   └── products.e2e-spec.ts
 │
 ├── docs/
 │   ├── flyer-ingestion.md
@@ -408,6 +420,64 @@ This endpoint may be removed later.
 
 ---
 
+## Product Catalogue API
+
+The public product catalogue powers the frontend basket picker. It returns active products only and includes current flyer-estimate metadata. Store-level price values are not exposed here; the basket comparison remains the source of priced totals.
+
+```text
+GET /products
+GET /products?q=candle&postalCode=T3M1T4
+GET /products?category=GROCERY&limit=25&offset=50
+GET /products?retailerId=<retailer-uuid>
+```
+
+Query parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `q` | Case-insensitive search over product name, brand, and package text |
+| `category` | Exact category, case-insensitive (`GROCERY`, `HOUSEHOLD`, `PET`, etc.) |
+| `retailerId` | Only products with an advertised offer or a store observation at that retailer |
+| `postalCode` | Used to rank current advertised offers by market match |
+| `limit` | Page size, 1–250; defaults to 60 |
+| `offset` | Zero-based page offset |
+
+Example response shape:
+
+```json
+{
+  "total": 214,
+  "count": 2,
+  "limit": 60,
+  "offset": 0,
+  "postalCode": "T3M 1T4",
+  "asOf": "2026-11-15T15:04:14.039Z",
+  "products": [
+    {
+      "id": "26c6dfc2-cd5a-40e3-a4f6-8b617ded1036",
+      "productName": "LIFE AT HOME™ 9 OZ CANDLE, CRANBERRY TEA",
+      "brand": "LIFE AT HOME™",
+      "quantityText": "9 OZ",
+      "category": "GROCERY",
+      "verifiedStorePriceCount": 0,
+      "currentOfferCount": 1,
+      "latestAdvertisedOffer": {
+        "retailerName": "Real Canadian Superstore",
+        "marketKey": "T2A4T8",
+        "marketMatch": "OTHER_MARKET",
+        "advertisedPrice": 12,
+        "currency": "CAD",
+        "validUntil": "2026-12-17T04:59:59.000Z"
+      }
+    }
+  ]
+}
+```
+
+A `latestAdvertisedOffer` is an advertised estimate, not a store-verified shelf price. The basket marks these items separately and warns when the flyer market differs from the customer's area.
+
+---
+
 ## Authentication and User API
 
 Implemented endpoints:
@@ -648,11 +718,15 @@ This returns the same comparison shape with `"basketId": null`. If `postalCode` 
 
 ### Pricing and travel rules
 
-- The latest price observation per store and product is used.
+- The latest usable store price observation per store and product is used.
 - An active sale price is used when the current time is inside its `validFrom`/`validUntil` window.
 - An expired or not-yet-started sale falls back to the regular price. Expired sales produce a warning.
+- If no usable store observation exists, a current advertised offer for the same retailer can be used as a retailer-level estimate.
+- Advertised offers must be date-valid, in CAD, positive, and free of blocking conditions. Member-only, multibuy, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit basket prices.
+- Verified store observations outrank advertised estimates. The response includes `priceSource`, `priceConfidence`, advertised-offer metadata, and per-store estimate counts.
+- Advertised offers from another postal-code market are included but ranked lower and flagged `OTHER_MARKET`. Expired flyer offers are never used.
 - A store missing any requested product is incomplete and is never recommended as the cheapest store. Missing products are listed explicitly.
-- Prices older than 24 hours are flagged with a warning.
+- Store-verified prices older than 24 hours are flagged with a warning. An older flyer observation is not mislabeled as a stale shelf price.
 - Travel distance is estimated from the customer's FSA centroid to the store's recorded latitude/longitude using the Haversine formula.
 - Driving distance is approximated as straight-line distance × `roadDistanceFactor`, then doubled for a round trip.
 - Travel cost is driving distance × `travelCostPerKm`. The defaults are `0.35 CAD/km`, a `1.3` road factor, and a round trip.
@@ -680,11 +754,11 @@ npm run test:e2e
 Current result:
 
 ```text
-68 unit tests passing
-40 end-to-end tests passing
+77 unit tests passing
+48 end-to-end tests passing
 ```
 
-Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, Haversine distance, travel-cost rounding, postal-code normalization, numeric parsing, flyer package-size parsing, unit-price conversion, multi-pack and range handling, promotion parsing (multibuy, member/loyalty, price range, BOGO, limits, spend thresholds, coupons, points), member-price detection, and flyer offer normalization.
+Unit tests cover active/expired sale pricing, quantity multiplication, missing-product handling, latest-observation selection, advertised-offer eligibility and market ranking, store-verified versus advertised source precedence, Haversine distance, travel-cost rounding, postal-code normalization, numeric parsing, flyer package-size parsing, unit-price conversion, multi-pack and range handling, promotion parsing (multibuy, member/loyalty, price range, BOGO, limits, spend thresholds, coupons, points), member-price detection, and flyer offer normalization.
 
 The current E2E suite verifies:
 
@@ -712,13 +786,15 @@ The current E2E suite verifies:
 - postal-code validation
 - rejection of a persisted comparison without a postal code
 - admin review-queue authentication and role protection
-- admin approval creating a canonical product and validated price observation
-- admin rejection without publishing a price
-- opt-in price publication and catalogue-only approval
+- admin approval creating a canonical product and an advertised offer
+- admin approval optionally publishing a validated store price observation
+- admin rejection withdrawing both published records
 - canonical product reuse across weekly offers
-- refusal to publish member-only, multibuy, or unresolved multi-variant offers
+- refusal to publish member-only, multibuy, or unresolved multi-variant price observations
+- advertised-offer basket estimates, including source and market-match metadata
+- public product catalogue search and current-offer metadata
 
-Test accounts, baskets, flyers, staged offers, and canonical products created during the E2E suite are removed after testing.
+Test accounts, baskets, flyers, staged offers, advertised offers, and canonical products created during the E2E suite are removed after testing.
 
 ---
 
@@ -850,24 +926,25 @@ See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md) for the full review wor
 - review flags for ambiguous or unsupported pricing
 - exact-product and similar-product flyer comparison APIs
 - protected admin flyer-review queue and summary endpoints
-- approval workflow with canonical product upsert and validated price publication
+- approval workflow with canonical product upsert, advertised-offer publication, and optional store price publication
 - stable flyer product keys and optional barcodes
+- public product catalogue with current flyer-estimate metadata
+- reviewed flyer offers wired into basket estimates and the frontend product picker
 - automated authentication/user E2E tests
-- automated basket comparison E2E tests
+- automated basket comparison and advertised-offer E2E tests
 - automated admin review E2E tests
+- automated product catalogue E2E tests
 - automated flyer normalization and promotion parser tests
 - Postman authentication/user testing
 
 ### Next Backend Milestones
 
 1. Member-aware and multibuy-aware basket pricing
-2. Wire reviewed flyer offers into the frontend basket flow
-3. Product and price APIs for reviewed offers
-4. Import and validate the team's 95-location Calgary store dataset
-5. Transit, walking, and cycling travel modes
-6. Route-aware travel time and multi-stop optimization
-7. Split-basket recommendation
-8. Administrative analytics and operational tooling
+2. Import and validate the team's 95-location Calgary store dataset
+3. Transit, walking, and cycling travel modes
+4. Route-aware travel time and multi-stop optimization
+5. Split-basket recommendation
+6. Administrative analytics and operational tooling
 
 ---
 
@@ -898,9 +975,10 @@ Run an ingestion:
 npm run ingest:flyers -- --postal-code T3M1T4
 ```
 
-The command creates a new `IngestBatch`, one `Flyer` row per retailer flyer, and `StagedOffer` rows for each priced item. The latest completed batch is used by these public endpoints:
+The command creates a new `IngestBatch`, one `Flyer` row per retailer flyer, and `StagedOffer` rows for each priced item. Ingestion does **not** publish prices by itself. The latest completed batch is used by these public endpoints:
 
 ```text
+GET /products?q=butter&postalCode=T3M1T4
 GET /flyers/summary
 GET /flyers/offers?q=butter&status=NORMALIZED
 GET /flyers/offers?status=ALL&promotionType=ANY
@@ -917,7 +995,7 @@ GET   /admin/flyer-offers/:id
 PATCH /admin/flyer-offers/:id/review
 ```
 
-The review endpoint accepts `APPROVE`, `REJECT`, or `NEEDS_INFO`. Approval can match an existing product, create a canonical product with `createProduct: true`, and publish a price observation with `publishPrice: true`. Price publication is opt-in and requires a `storeId`; ambiguous or unsupported promotions are rejected until an administrator resolves them. See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
+The review endpoint accepts `APPROVE`, `REJECT`, or `NEEDS_INFO`. Approval can match an existing product or create a canonical product with `createProduct: true`. Every approval upserts an `AdvertisedOffer` that the public product catalogue and basket can use as a retailer-level estimate. `publishPrice: true` additionally writes a store-level `PriceObservation` and requires a `storeId`; store-verified observations always outrank advertised estimates. Rejecting or returning an approved offer to `NEEDS_INFO` withdraws both published records. Ambiguous or unsupported promotions are retained with their conditions and excluded from single-unit basket pricing until an administrator resolves them. See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
 
 Comparison policy:
 
@@ -926,11 +1004,11 @@ Comparison policy:
 - `status=NORMALIZED` (the default) excludes offers with blocking review flags such as member-only pricing, multi-buys, size ranges, and multi-variants. `status=ALL` exposes those rows with their review reasons intact.
 - `promotionType` filters promotional rows by type; use `promotionType=ANY` to return every offer whose type is not `NONE`.
 
-The latest run on 2026-11-10 staged **816 offers**: 240 `NORMALIZED` and 576 `PENDING_REVIEW`, across all three retailers. The first successful run on 2026-10-30 staged 745 offers. These counts change with each flyer cycle.
+Staged-offer counts change with every flyer cycle. A single cycle can contain several hundred offers across the supported retailers, so the review queue is expected to be the gating step between ingestion and published pricing.
 
 The frontend discovery surface is `/flyers`. It searches the latest batch, shows exact matches separately from similar products, keeps review flags visible, and stores the search in the URL (`/flyers?q=cheese&status=ALL`). A **Promotion watch** strip loads multibuy, member-price, price-range, and other promotional rows even when the default view is limited to verified prices. Promotion cards show the advertised deal, quantity requirement, per-item calculation (for example, `2 for $5.00` → `$2.50 each`), member/non-member prices, and conditions.
 
-The basket comparison uses canonical `Product`/`PriceObservation` records. Flyer offers remain a separate discovery/comparison surface until an administrator promotes them, or the basket flow explicitly supports staged offers. Approved, unambiguous offers can now publish validated price observations for a selected store; member-only and multibuy offers remain staged until member-aware and quantity-aware pricing is implemented.
+The basket comparison uses current `AdvertisedOffer` rows as retailer-level estimates only when no usable store-level `PriceObservation` exists for that product and store. Verified observations win; offers from another postal-code market are included but ranked lower and flagged `OTHER_MARKET`; expired flyer offers never affect basket totals. Member-only, multibuy, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit sale prices. The frontend product picker reads the public catalogue and labels flyer estimates separately from store prices.
 
 **Source terms:** confirm Flipp and retailer terms of use before production use. The ingester uses rate limiting and does not bypass access controls.
 

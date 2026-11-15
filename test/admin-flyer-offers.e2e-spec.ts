@@ -212,6 +212,7 @@ describe("Admin flyer offer review (e2e)", () => {
       await prisma.priceObservation.deleteMany({
         where: { sourceSystemId },
       });
+      await prisma.advertisedOffer.deleteMany({ where: { sourceSystemId } });
       await prisma.stagedOffer.deleteMany({ where: { ingestBatchId: batchId } });
       await prisma.flyer.deleteMany({ where: { sourceSystemId } });
       await prisma.ingestBatch.deleteMany({ where: { sourceSystemId } });
@@ -327,6 +328,12 @@ describe("Admin flyer offer review (e2e)", () => {
       matchedProductId: expect.any(String),
     });
     expect(response.body.product.catalogKey).toBe(catalogKey);
+    expect(response.body.advertisedOffer).toMatchObject({
+      productId: response.body.offer.matchedProductId,
+      marketKey: "T3M1T4",
+      advertisedPrice: 9.99,
+      currency: "CAD",
+    });
     expect(response.body.priceObservation).toMatchObject({
       productId: response.body.offer.matchedProductId,
       storeId,
@@ -351,6 +358,41 @@ describe("Admin flyer offer review (e2e)", () => {
       where: { productId: mainProductId, storeId },
     });
     expect(observations).toHaveLength(1);
+  });
+
+  it("updates the advertised offer instead of duplicating it on re-review", async () => {
+    const response = await request(app.getHttpServer())
+      .patch(`/admin/flyer-offers/${offerId}/review`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        decision: "APPROVE",
+        productId: mainProductId,
+        storeId,
+        publishPrice: true,
+        unitPrice: 7.77,
+        notes: "Corrected price during re-review",
+      })
+      .expect(200);
+
+    expect(response.body.advertisedOffer).toMatchObject({
+      productId: mainProductId,
+      advertisedPrice: 7.77,
+    });
+
+    const advertisedOffers = await prisma.advertisedOffer.findMany({
+      where: {
+        sourceSystemId,
+        sourceRecordId: `e2e-offer-${suffix}`,
+      },
+    });
+    expect(advertisedOffers).toHaveLength(1);
+    expect(advertisedOffers[0].advertisedPriceAmount?.toNumber()).toBe(7.77);
+
+    const observations = await prisma.priceObservation.findMany({
+      where: { productId: mainProductId, storeId },
+    });
+    expect(observations).toHaveLength(1);
+    expect(observations[0].salePrice.toNumber()).toBe(7.77);
   });
 
   it("does not publish a price unless explicitly requested", async () => {
@@ -405,6 +447,35 @@ describe("Admin flyer offer review (e2e)", () => {
       where: { productId: mainProductId, storeId },
     });
     expect(observations).toHaveLength(2);
+  });
+
+  it("withdraws a store price when an offer is re-approved as catalogue-only", async () => {
+    await request(app.getHttpServer())
+      .patch(`/admin/flyer-offers/${offerId}/review`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        decision: "APPROVE",
+        productId: mainProductId,
+        publishPrice: false,
+        notes: "Keep the flyer estimate, withdraw the store price",
+      })
+      .expect(200);
+
+    const observations = await prisma.priceObservation.findMany({
+      where: {
+        sourceSystemId,
+        sourceRecordId: `e2e-offer-${suffix}`,
+      },
+    });
+    expect(observations).toHaveLength(0);
+
+    const advertisedOffers = await prisma.advertisedOffer.findMany({
+      where: {
+        sourceSystemId,
+        sourceRecordId: `e2e-offer-${suffix}`,
+      },
+    });
+    expect(advertisedOffers).toHaveLength(1);
   });
 
   it("refuses to publish member-only or multibuy prices as general sale prices", async () => {
@@ -501,6 +572,11 @@ describe("Admin flyer offer review (e2e)", () => {
       where: { productId: withdrawnProductId, storeId },
     });
     expect(beforeReject).toHaveLength(1);
+    expect(
+      await prisma.advertisedOffer.count({
+        where: { sourceRecordId: `e2e-withdraw-${suffix}` },
+      }),
+    ).toBe(1);
 
     await request(app.getHttpServer())
       .patch(`/admin/flyer-offers/${withdrawOffer.id}/review`)
@@ -515,6 +591,11 @@ describe("Admin flyer offer review (e2e)", () => {
       where: { productId: withdrawnProductId, storeId },
     });
     expect(afterReject).toHaveLength(0);
+    expect(
+      await prisma.advertisedOffer.count({
+        where: { sourceRecordId: `e2e-withdraw-${suffix}` },
+      }),
+    ).toBe(0);
   });
 
   it("records a rejection without publishing a price", async () => {

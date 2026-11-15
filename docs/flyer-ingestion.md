@@ -71,9 +71,9 @@ One row per priced flyer item in an ingestion batch:
 - Many flyer items are multi-variant, size ranges, member-only prices, or multi-buys.
 - Automatically merging those rows into a canonical product would fabricate precision that the source does not provide.
 
-`Product` and `PriceObservation` remain the canonical layer for reviewed, matched data. The admin review workflow promotes a `StagedOffer` by matching an existing product, creating a canonical product with a stable `catalogKey`, and optionally publishing a validated `PriceObservation`. Barcodes are optional and are never invented.
+`Product`, `AdvertisedOffer`, and `PriceObservation` form the reviewed data layer. The admin review workflow promotes a `StagedOffer` by matching an existing product, creating a canonical product with a stable `catalogKey`, and upserting a retailer-level `AdvertisedOffer`. It can optionally publish a stricter store-level `PriceObservation`. Barcodes are optional and are never invented.
 
-A `catalogKey` is a stable, unique product identifier derived from the normalized match key (or a retailer/source-record fallback). Weekly reviews reuse the same product row instead of creating duplicate products. A reviewed offer may be approved without publishing a price when its promotion conditions are not representable in the canonical pricing model.
+A `catalogKey` is a stable, unique product identifier derived from the normalized match key (or a retailer/source-record fallback). Weekly reviews reuse the same product row instead of creating duplicate products. A reviewed offer may be approved without publishing a store price; its `AdvertisedOffer` remains available to the catalogue and basket as an estimate when its conditions are representable.
 
 ---
 
@@ -362,9 +362,9 @@ Content-Type: application/json
 
 Decisions:
 
-- `APPROVE`: resolve the canonical product, optionally publish a price observation, then mark the offer `NORMALIZED`.
-- `REJECT`: mark the offer `REJECTED` with no product or price publication.
-- `NEEDS_INFO`: keep the offer `PENDING_REVIEW` and record the reviewer note.
+- `APPROVE`: resolve the canonical product, upsert an advertised offer, optionally publish a store price observation, then mark the offer `NORMALIZED`.
+- `REJECT`: mark the offer `REJECTED` and withdraw any advertised offer or price observation previously published from it.
+- `NEEDS_INFO`: keep the offer `PENDING_REVIEW`, record the reviewer note, and withdraw any previously published records.
 
 Approval behavior:
 
@@ -372,12 +372,13 @@ Approval behavior:
 - Otherwise, an existing `matchedProductId`, barcode, or `catalogKey` match is reused.
 - If no product exists, `createProduct: true` is required. The product receives the supplied `catalogKey`, or a key generated from a stable match key. Offers without a stable match key require an explicit `catalogKey`; `barcode` remains optional.
 - Multi-variant offers must supply an explicit `productId`; they cannot be auto-created from ambiguous flyer text.
-- Price publication is opt-in with `publishPrice: true` and requires `storeId` belonging to the offer retailer.
-- `unitPrice` overrides the parsed advertised or multibuy per-item price.
-- Price ranges, multi-variant offers, and ambiguous `OTHER` offers require an explicit `unitPrice`.
-- Member-only, multibuy, BOGO, free-item, coupon, and minimum-spend offers cannot be published as general sale prices yet. They can still be approved as catalogue products without a price observation.
-- Re-reviewing the same offer updates the existing source-linked price observation instead of creating a duplicate.
-- Rejecting or returning a previously approved offer to `NEEDS_INFO` withdraws its published price observation.
+- Every approval upserts a retailer-level `AdvertisedOffer` with a stable SHA-256 key. This is idempotent across re-reviews and weekly runs.
+- Store price publication is opt-in with `publishPrice: true` and requires `storeId` belonging to the offer retailer.
+- `unitPrice` overrides the parsed advertised or multibuy per-item price for both published records.
+- Price ranges, multi-variant offers, and ambiguous `OTHER` offers require an explicit `unitPrice` before a store price can be published.
+- Member-only, multibuy, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit sale or basket prices yet. They can still be approved as catalogue products with their conditions retained for review.
+- Re-reviewing the same offer updates the existing source-linked advertised offer and price observation instead of creating duplicates.
+- Rejecting or returning a previously approved offer to `NEEDS_INFO` withdraws both published records.
 
 ---
 
@@ -404,7 +405,7 @@ These counts are a snapshot, not a guarantee; flyers change weekly.
 - **Package sizes are extracted from text.** Descriptions are inconsistent; ranges and multi-variant offers remain approximate and are flagged.
 - **Per-weight produce cannot be priced as a fixed basket item.** It is stored with a per-100 g unit price and marked for review.
 - **Family comparison is broad.** `produce|100g` can contain unrelated produce items. It is not an exact-match substitute.
-- **Promotion-aware basket pricing is not implemented.** Member-only, multibuy, BOGO, coupon, and minimum-spend prices are preserved and reviewed but are not published as general sale prices. The basket engine still compares single-unit, non-member prices.
+- **Promotion-aware basket pricing is partial.** Current, condition-safe advertised offers can enter basket totals as retailer-level estimates. Member-only, multibuy, BOGO, coupon, minimum-spend, price-range, and multi-variant prices are preserved and reviewed but are not used as single-unit sale prices.
 - **Review is manual.** The admin queue can approve, reject, or request more information, but product identity and ambiguous promotion resolution still require a human decision.
 - **Source terms.** Production use of Flipp's JSON endpoints requires a terms-of-use review.
 
@@ -425,11 +426,11 @@ The Kavyo frontend exposes the flyer surface at `/flyers`. The page:
 
 Example: `/flyers?q=cheese&status=ALL&retailer=Safeway`.
 
-The flyer page is still a separate discovery/comparison surface. The basket comparison uses canonical `Product`/`PriceObservation` records. Reviewed, unambiguous offers can now be promoted through the admin API, but the frontend still needs a review console and promotion-aware basket behavior.
+The flyer page remains a separate discovery/comparison surface. The basket product picker loads the public `/products` catalogue, and reviewed, current offers appear as flyer estimates. Store-verified observations take priority. The frontend still needs an admin review console and fuller promotion-aware basket behavior.
 
 Remaining integration work:
 
 1. Build the admin review console on top of `/admin/flyer-offers`.
-2. Let the basket builder add a staged flyer offer without pretending it is a canonical product.
-3. Add member-aware and multibuy-aware basket pricing before publishing those offers as general prices.
-4. Keep unresolved member, multibuy, range, and variant offers visibly labelled.
+2. Add member-aware and multibuy-aware basket pricing before using those offers as general prices.
+3. Keep unresolved member, multibuy, range, and variant offers visibly labelled.
+4. Improve automatic product matching so the staged backlog can be linked with less manual effort.

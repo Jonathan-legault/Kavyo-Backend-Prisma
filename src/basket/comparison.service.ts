@@ -13,8 +13,14 @@ import {
   PriceObservationInput,
   RequestedBasketItem,
   roundMoney,
+  selectEffectivePrice,
   toFiniteNumber,
 } from "./calculation/pricing.js";
+import {
+  AdvertisedOfferInput,
+  evaluateAdvertisedOffer,
+  selectBestAdvertisedOffer,
+} from "./calculation/advertised-offer-pricing.js";
 import { PostalCodeService, PostalLocation } from "./calculation/postal-code.service.js";
 import {
   DEFAULT_TRAVEL_OPTIONS,
@@ -52,6 +58,8 @@ export interface StoreComparisonResult {
   oldestPriceObservedAt: string | null;
   hasExpiredSale: boolean;
   hasStalePrice: boolean;
+  advertisedItemCount: number;
+  hasAdvertisedEstimate: boolean;
 }
 
 export interface StoreComparisonSummary {
@@ -81,6 +89,8 @@ export interface BasketComparisonResult {
     locationPrecision: "FSA_CENTROID" | null;
   };
   comparisons: StoreComparisonResult[];
+  advertisedOfferItemCount: number;
+  hasAdvertisedEstimate: boolean;
   cheapestCompleteStore: StoreComparisonSummary | null;
   closestPartialStore: StoreComparisonSummary | null;
   recommendation: {
@@ -282,6 +292,33 @@ export class BasketComparisonService {
       },
     });
 
+    // Advertised offers are retailer-level estimates. Only current offers with
+    // understood, single-unit conditions are considered; member, multibuy,
+    // price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend
+    // offers remain excluded from basket totals until they have an explicit
+    // pricing model.
+    const advertisedOfferRows = await this.prisma.advertisedOffer.findMany({
+      where: {
+        productId: { in: productIds },
+        currency: "CAD",
+        advertisedPriceAmount: { gt: 0 },
+        observedAt: { lte: now },
+        AND: [
+          { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
+          { OR: [{ validUntil: null }, { validUntil: { gt: now } }] },
+        ],
+      },
+      orderBy: {
+        observedAt: "desc",
+      },
+    });
+
+    const advertisedOffers: AdvertisedOfferInput[] = advertisedOfferRows;
+    const verifiedObservations: PriceObservationInput[] = observations;
+    const blockedAdvertisedOfferCount = advertisedOffers.filter(
+      (offer) => !evaluateAdvertisedOffer(offer, now, {}).eligible,
+    ).length;
+
     const travelOptions: TravelOptions = {
       travelCostPerKm: options.travelCostPerKm,
       roundTrip: options.roundTrip,
@@ -289,10 +326,61 @@ export class BasketComparisonService {
     };
 
     const comparisons: StoreComparisonResult[] = stores.map((store) => {
+      const verifiedProductIds = new Set(
+        verifiedObservations
+          .filter(
+            (observation) =>
+              observation.storeId === store.id &&
+              selectEffectivePrice(observation, now) !== null,
+          )
+          .map((observation) => observation.productId),
+      );
+      const advertisedObservations: PriceObservationInput[] = [];
+
+      for (const requested of requestedItems) {
+        if (verifiedProductIds.has(requested.productId)) {
+          continue;
+        }
+
+        const bestOffer = selectBestAdvertisedOffer(
+          advertisedOffers.filter(
+            (offer) =>
+              offer.productId === requested.productId &&
+              offer.retailerId === store.retailerId,
+          ),
+          now,
+          {
+            customerPostalCode: options.postalCode,
+            storePostalCode: store.postalCode,
+          },
+        );
+
+        if (!bestOffer) {
+          continue;
+        }
+
+        advertisedObservations.push({
+          productId: requested.productId,
+          storeId: store.id,
+          regularPrice: bestOffer.offer.regularPriceAmount,
+          salePrice: bestOffer.unitPrice,
+          currency: "CAD",
+          observedAt: bestOffer.offer.observedAt,
+          validFrom: bestOffer.offer.validFrom,
+          validUntil: bestOffer.offer.validUntil,
+          priceSource: "ADVERTISED_OFFER",
+          advertisedOfferId: bestOffer.offer.id,
+          offerRetailerName: store.retailer.name,
+          offerMarketKey: bestOffer.offer.marketKey,
+          offerMarketMatch: bestOffer.marketMatch,
+          offerPromotionText: bestOffer.offer.promotionText,
+        });
+      }
+
       const pricing = calculateStoreBasket(
         store.id,
         requestedItems,
-        observations as PriceObservationInput[],
+        [...verifiedObservations, ...advertisedObservations],
         now,
       );
 
@@ -341,8 +429,26 @@ export class BasketComparisonService {
           pricing.oldestObservedAt?.toISOString() ?? null,
         hasExpiredSale: pricing.hasExpiredSale,
         hasStalePrice: pricing.hasStalePrice,
+        advertisedItemCount: pricing.advertisedItemCount,
+        hasAdvertisedEstimate: pricing.hasAdvertisedEstimate,
       };
     });
+
+    const advertisedProductIds = new Set(
+      comparisons.flatMap((store) =>
+        store.items
+          .filter((item) => item.priceSource === "ADVERTISED_OFFER")
+          .map((item) => item.productId),
+      ),
+    );
+    const otherMarketOfferCount = comparisons.reduce(
+      (count, store) =>
+        count +
+        store.items.filter(
+          (item) => item.offerMarketMatch === "OTHER_MARKET",
+        ).length,
+      0,
+    );
 
     const completeStores = comparisons
       .filter(
@@ -440,6 +546,8 @@ export class BasketComparisonService {
           : null,
       },
       comparisons: rankedComparisons,
+      advertisedOfferItemCount: advertisedProductIds.size,
+      hasAdvertisedEstimate: advertisedProductIds.size > 0,
       cheapestCompleteStore: cheapest
         ? this.toSummary(cheapest)
         : null,
@@ -450,6 +558,8 @@ export class BasketComparisonService {
       warnings: this.buildWarnings({
         comparisons,
         customerLocation,
+        blockedAdvertisedOfferCount,
+        otherMarketOfferCount,
       }),
     };
   }
@@ -687,6 +797,8 @@ export class BasketComparisonService {
   private buildWarnings(input: {
     comparisons: StoreComparisonResult[];
     customerLocation: PostalLocation | null;
+    blockedAdvertisedOfferCount: number;
+    otherMarketOfferCount: number;
   }): string[] {
     const warnings = new Set<string>();
 
@@ -709,6 +821,26 @@ export class BasketComparisonService {
     if (input.comparisons.some((store) => store.hasStalePrice)) {
       warnings.add(
         "Some prices are more than 24 hours old. Confirm them before travelling.",
+      );
+    }
+
+    if (input.comparisons.some((store) => store.hasAdvertisedEstimate)) {
+      warnings.add(
+        "Some basket items use retailer-level flyer estimates, not store-verified shelf prices. Confirm availability and price before travelling.",
+      );
+    }
+
+    if (input.otherMarketOfferCount > 0) {
+      warnings.add(
+        "One or more flyer estimates come from a different postal-code market. The advertised price may not be available at this store.",
+      );
+    }
+
+    if (input.blockedAdvertisedOfferCount > 0) {
+      warnings.add(
+        `${input.blockedAdvertisedOfferCount} current flyer offer${
+          input.blockedAdvertisedOfferCount === 1 ? "" : "s"
+        } could not be used in the basket because of member-only, multibuy, price-range, multi-variant, BOGO, free-item, coupon, minimum-spend, or unresolved conditions.`,
       );
     }
 
