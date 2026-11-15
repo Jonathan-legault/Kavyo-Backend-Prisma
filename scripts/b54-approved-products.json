@@ -1,0 +1,33 @@
+{
+  "purpose": "B5.4 final approved new canonical identities; Enfagrow intentionally excluded",
+  "products": [
+    {
+      "fingerprint": "476643dda20c343584d825f36e85ddf4229f5eab5960ca1e788db503fec78385",
+      "productName": "Advent Calendar",
+      "brand": "Reese's",
+      "quantityText": "212 g",
+      "offerIds": ["e32c082c-9694-49da-9ffd-7ab49ac0d205"]
+    },
+    {
+      "fingerprint": "6661e5d81ac7c37e5103e35d7cd5972451754f6a91bf28a5461a88156f721351",
+      "productName": "Silk protein soy beverage Unsweetened",
+      "brand": "Silk",
+      "quantityText": "946 ml",
+      "offerIds": ["4fbc1380-be4f-45c3-8a09-24b2438a0757"]
+    },
+    {
+      "fingerprint": "84b2ec93a4cf37c3802005bb4f8d5793c8d3fd3e4196b4fc811028d86007b270",
+      "productName": "Avocados",
+      "brand": null,
+      "quantityText": "5 each",
+      "offerIds": ["0a8a3a35-1f12-40d0-b283-8fffab476d0d"]
+    },
+    {
+      "fingerprint": "e40070f6a49a82737cd6fc18526701e1286f9a8d3cc8234aa69da1d06c8018a8",
+      "productName": "Apna Taste perra",
+      "brand": "APNA TASTE",
+      "quantityText": "400 g",
+      "offerIds": ["2ba65dc5-ffab-4d03-b0fd-a403599af618", "495e86f3-78da-4329-800c-d5a258b461b5"]
+    }
+  ]
+}

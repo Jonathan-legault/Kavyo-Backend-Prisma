@@ -212,7 +212,7 @@ export class BasketsService {
       updatedAt: Date;
       product: {
         id: string;
-        barcode: string;
+        barcode: string | null;
         productName: string;
         brand: string | null;
         quantityText: string | null;

@@ -73,3 +73,18 @@ data/raw/
 # Local review archives
 /kavyo-ingestion-review.zip
 /Kavyo-*.zip
+
+/backups/
+
+# Phase B generated reports and local research exports
+/data/research/living-db/
+
+# Local development backups
+*.bak
+*.backup
+
+# Temporary schema patch
+/schema-phase-b2.patch
+
+# Local development archives
+/src/kavyob-6.zip
