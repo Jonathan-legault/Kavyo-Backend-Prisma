@@ -163,7 +163,8 @@ export function normalizeFlyerOffer(
     ? null
     : packageSize.quantityValue;
 
-  const safeUnitPrice = hasAmbiguousQuantity
+  // A bundle price does not establish the price of buying one item.
+  const safeUnitPrice = hasAmbiguousQuantity || isMultibuy
     ? null
     : unitPrice;
 
@@ -190,8 +191,8 @@ export function normalizeFlyerOffer(
     quantityUnit: packageSize.quantityUnit,
     quantityText: packageSize.text,
 
-    unitPrice: unitPrice?.value,
-    unitPriceBasis: unitPrice?.basis,
+    unitPrice: safeUnitPrice?.value,
+    unitPriceBasis: safeUnitPrice?.basis,
     pricingBasis,
     quantityIsApproximate: packageSize.isApproximate,
     isPriceRange: packageSize.isRange,
@@ -201,12 +202,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
   });
 
+  // Quantity-dependent offers cannot be treated as independently priced items.
   const reviewRequired =
-    validation.reviewRequired || isMultiVariant;
+    validation.reviewRequired || isMultiVariant || isMultibuy;
 
-  const finalReviewReasons = isMultiVariant
-    ? [...new Set([...validation.reasons, "MULTI_VARIANT"])]
-    : validation.reasons;
+  const finalReviewReasons = [
+    ...new Set([
+      ...validation.reasons,
+      ...(isMultiVariant ? ["MULTI_VARIANT"] : []),
+      ...(isMultibuy ? ["MULTIBUY"] : []),
+    ]),
+  ];
 
   const status = reviewRequired
   ? "PENDING_REVIEW"
@@ -407,7 +413,9 @@ function parseRegularPrice(disclaimerText: string): number | null {
 function detectMultibuy(text: string): boolean {
   return (
     /\b\d+\s*(?:for|\/)\s*\$?\s*\d+(?:\.\d+)?\b/i.test(text) ||
-    /\bmix and match\b/i.test(text)
+    /\bmix and match\b/i.test(text) ||
+    /\bbuy\s+\d+\s*,?\s*get\s+\d+\b/i.test(text) ||
+    /\bwhen\s+you\s+buy\s+\d+\b/i.test(text)
   );
 }
 

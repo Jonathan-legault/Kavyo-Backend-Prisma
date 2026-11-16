@@ -16,7 +16,7 @@ const include: Array<[string, RegExp]> = [
   ['BABY', /\b(?:baby formula|infant formula|baby food|baby wipes?|diapers?|nappies|training pants|baby shampoo|baby lotion|baby powder|baby wash|baby cereal|baby snacks?|pacifiers?|baby bottles?|baby care|night pants|pull[- ]?ups)\b/i],
   ['PERSONAL_CARE', /\b(?:shampoo|conditioner|body wash|bar soap|hand soap|toothpaste|toothbrush|dental floss|mouthwash|deodorant|antiperspirant|razor blades?|shaving cream|skin care|moisturiz(?:er|ing)|face wash|facial cleanser|menstrual|tampons?|sanitary pads?|incontinence|bladder control|absorbent underwear|discreet underwear|hair dye|hair colour|makeup|mascara|lip balm|lipstick|face cream|cotton swabs?|cotton balls?|bath tissue|toilet paper|facial tissues?)\b/i],
   ['HOUSEHOLD', /\b(?:laundry detergent|laundry pods?|fabric softener|dish soap|dishwasher detergent|dishwasher tabs?|dishwashing liquid|cleaning wipes?|disinfectant|all[- ]purpose cleaner|surface cleaner|window cleaner|bleach|garbage bags?|trash bags?|paper towels?|aluminum foil|aluminium foil|plastic wrap|cling wrap|parchment paper|food storage bags?|sandwich bags?|freezer bags?|food containers?|cleaning supplies|sponges?|scrub pads?|air freshener)\b/i],
-  ['GROCERY', /\b(?:milk|cheese|yog(?:urt|hourt)|butter|cream cheese|ice cream|eggs?|bread|bagels?|tortillas?|cereal|oatmeal|rice|pasta|noodles?|flour|sugar|salt|pepper|spices?|seasoning|olive oil|canola oil|vegetable oil|vinegar|sauce|ketchup|mustard|mayonnaise|jam|jelly|peanut butter|almond butter|honey|cookies?|crackers?|chips|popcorn|chocolate|candy|candies|snacks?|granola|nuts?|almonds?|peanuts?|cashews?|soup|broth|stock|beans?|lentils?|tomatoes?|potatoes?|onions?|carrots?|lettuce|salad|spinach|broccoli|cauliflower|apples?|bananas?|oranges?|berries|grapes?|avocado|chicken|beef|pork|turkey|bacon|sausages?|fish|salmon|shrimp|seafood|steak|ground beef|hamburger|pizza|frozen meals?|entrées?|entrees?|frozen vegetables?|juice|coffee|tea|water|sparkling beverages?|soft drinks?|soda|cola|energy drinks?|sports drinks?|pickles?|olives?|canned|preserves?|deli|meat|produce|bakery|dessert|cake|muffins?|buns?|rolls?|fruit|vegetables?|beverages?|food|chili|tuna|salmon|flavoured? water|seltzer)\b/i]
+  ['GROCERY', /\b(?:milk|cheese|yog(?:urt|hourt)|butter|cream cheese|ice cream|eggs?|bread|bagels?|tortillas?|cereal|oatmeal|rice|pasta|noodles?|flour|sugar|salt|pepper|spices?|seasoning|olive oil|canola oil|vegetable oil|vinegar|sauce|ketchup|mustard|mayonnaise|jam|jelly|peanut butter|almond butter|honey|cookies?|crackers?|chips|popcorn|chocolate|candy|candies|snacks?|granola|nuts?|almonds?|peanuts?|cashews?|soup|broth|stock|beans?|lentils?|tomatoes?|potatoes?|onions?|carrots?|lettuce|salad|spinach|broccoli|cauliflower|apples?|bananas?|oranges?|berries|grapes?|avocado|chicken|beef|pork|turkey|bacon|sausages?|fish|salmon|shrimp|seafood|steak|ground beef|hamburger|pizza|frozen meals?|entrÃ©es?|entrees?|frozen vegetables?|juice|coffee|tea|water|sparkling beverages?|soft drinks?|soda|cola|energy drinks?|sports drinks?|pickles?|olives?|canned|preserves?|deli|meat|produce|bakery|dessert|cake|muffins?|buns?|rolls?|fruit|vegetables?|beverages?|food|chili|tuna|salmon|flavoured? water|seltzer)\b/i]
 ];
 // Strongly contextual exclusions only. Avoid 'plate', 'bowl', 'battery', 'cream', 'oil', 'tablet', 'cat'.
 const exclude: Array<[string, RegExp]> = [
@@ -32,12 +32,12 @@ const promotions = /^(?:my offers?|get recipe|weekly (?:flyer|offers?)|shop now|
 // Audited additions from the November 11 review/exclusion CSVs.
 // Deliberately prefer a product-specific match over a retailer-wide assumption.
 const v3Positive: Array<[string, RegExp]> = [
-  ['BABY', /\b(?:huggies|pampers|baby wipes|infant wipes|parents?['’]? choice wipes|baby shampoo|baby lotion|baby wash|baby diapers|diaper cream|diaper rash|infant cereal)\b/i],
+  ['BABY', /\b(?:huggies|pampers|baby wipes|infant wipes|parents?['â€™]? choice wipes|baby shampoo|baby lotion|baby wash|baby diapers|diaper cream|diaper rash|infant cereal)\b/i],
   ['PERSONAL_CARE', /\b(?:poise pads?|depend underwear|depend briefs?|adult diapers?|incontinence pads?|feminine pads?|haircare|hair care|hair styling|styling products?|body lotion|hand lotion|body cream|face serum|body scrub|bath salts|dental rinse|toilet tissues?|facial wipes?|cleansing wipes?|cotton rounds|soap bars?|shower gel)\b/i],
   ['PHARMACY', /\b(?:sinus rinse|sinus relief|nasal rinse|neilmed|webber naturals|multivitamins?|pain relief|electrolyte packets?|first[- ]aid kits?|vitamin [a-z0-9]+|cough (?:medicine|syrup|drops)|allergy (?:tablets|medicine|relief))\b/i],
   ['HOUSEHOLD', /\b(?:multi[- ]purpose cleaners?|toilet bowl cleaners?|shower foam|lysol|scrubbing bubbles|clorox|tide (?:pods|detergent)|febreze|fabric refresher|dishwashing pods?|dish detergent|laundry products?|cleaning products?|disinfecting wipes?|garbage bags?|compost bags?|ziploc|bounty paper towels?|scotties tissues?|reynolds wrap|glad (?:bags|wrap)|storage bags?|dish sponges?)\b/i],
   ['PET', /\b(?:dog (?:biscuits|chews|treats|food|toys)|cat (?:treats|food|litter|toys)|pet (?:treats|food|accessories|care|toys)|purina|pedigree (?:dog|food)|whiskas|temptations cat|greenies (?:dog|cat))\b/i],
-  ['GROCERY', /\b(?:sourdough|raspberries|blackberries|okra|hummus|non[- ]dairy creamer|non[- ]alcoholic (?:beer|wine)|potato (?:fries|wedges)|hash\s?browns?|paratha|naan|toblerone|chipits|kisses|cupcakes?|chocolates?|biscuits?|mozza|pesto|frozen ramen|protein bars?|squares|cheddar|creamer|frozen (?:fries|food|dinners?|entrees?|meals?)|sliced (?:ham|turkey|cheese)|yogurt drinks?|fruit cups?|granola bars?|craft beer|sweet peppers?|cucumbers?|zucchini|mushrooms?|celery|mangoes?|pineapple|coconut milk|nut butter|pita|croissants?|donuts?|doughnuts?|pastries|pudding|chips|crackers|nutella|kinder bueno|rees[e]?['’]?s|hershey['’]?s|cavendish (?:fries|premium)|mccain (?:fries|hashbrowns)|schneiders (?:breakfast|sandwiches)|christie (?:premium|ritz))\b/i],
+  ['GROCERY', /\b(?:sourdough|raspberries|blackberries|okra|hummus|non[- ]dairy creamer|non[- ]alcoholic (?:beer|wine)|potato (?:fries|wedges)|hash\s?browns?|paratha|naan|toblerone|chipits|kisses|cupcakes?|chocolates?|biscuits?|mozza|pesto|frozen ramen|protein bars?|squares|cheddar|creamer|frozen (?:fries|food|dinners?|entrees?|meals?)|sliced (?:ham|turkey|cheese)|yogurt drinks?|fruit cups?|granola bars?|craft beer|sweet peppers?|cucumbers?|zucchini|mushrooms?|celery|mangoes?|pineapple|coconut milk|nut butter|pita|croissants?|donuts?|doughnuts?|pastries|pudding|chips|crackers|nutella|kinder bueno|rees[e]?['â€™]?s|hershey['â€™]?s|cavendish (?:fries|premium)|mccain (?:fries|hashbrowns)|schneiders (?:breakfast|sandwiches)|christie (?:premium|ritz))\b/i],
 ];
 const v3Negative: Array<[string, RegExp]> = [
   ['TOYS_SPORT', /\b(?:hot wheels|play[- ]doh|lego|toy story|barbie|action figures?|dolls?|toy cars?|collectible figurines?|super mario (?:pull back|racers)|peppa pig|plush (?:toys?|animals?)|puzzles?|board games?|snow sleds?|basketball (?:set|ball)|soccer ball|fidget toys?)\b/i],
@@ -63,6 +63,66 @@ export function classifyGroceryScope(record: ScopeInput): ScopeResult {
   // B5_1_PRODUCT_RULES: audited product-name classification, not retailer/brand classification.
   // Prioritize identified product types; avoid broad words like "monitor", "kit" and "calendar".
   const b5NameRules: Array<[string, RegExp, ScopeStatus, string]> = [
+
+    // PRIORITY: Gnocchi is food, even when described as "skillet gnocchi".
+    [
+      'GROCERY',
+      /\bgnocchi\b/i,
+      'IN_SCOPE',
+      'IDENTIFIED_GNOCCHI_FOOD',
+    ],
+
+    // PRIORITY: Mixed candle and air-freshener promotions require review.
+    [
+      'UNKNOWN',
+      /^(?=.*\bcandles?\b)(?=.*\b(?:plug[\s-]?ins?|scented oil refills?)\b).*$/i,
+      'REVIEW',
+      'MIXED_CANDLE_AND_AIR_FRESHENER',
+    ],
+
+
+    // Capture regression: recognized grocery product types.
+    ['GROCERY',
+      /\btilapia\s+fillets?\b/i,
+      'IN_SCOPE',
+      'IDENTIFIED_FISH_FILLET'],
+
+    ['GROCERY',
+      /\b(?:purple\s+)?yams?\b/i,
+      'IN_SCOPE',
+      'IDENTIFIED_FRESH_YAM'],
+
+    ['GROCERY',
+      /\bpapayas?\b/i,
+      'IN_SCOPE',
+      'IDENTIFIED_PAPAYA'],
+
+    ['GROCERY',
+      /\btofu\b/i,
+      'IN_SCOPE',
+      'IDENTIFIED_TOFU'],
+
+    // Capture regression: recognized general merchandise.
+    ['HOME_DECOR',
+      /\b(?:holiday|scented|decorative)\s+candles?\b/i,
+      'OUT_OF_SCOPE',
+      'IDENTIFIED_DECORATIVE_CANDLE'],
+
+    ['HOME_DECOR',
+      /\bLED\s+(?:deer|snowman)\s+family\b/i,
+      'OUT_OF_SCOPE',
+      'IDENTIFIED_DECORATIVE_LED_FIGURES'],
+
+    ['KITCHENWARE',
+      /\b(?:stainless\s+steel\s+)?dutch\s+ovens?\b/i,
+      'OUT_OF_SCOPE',
+      'IDENTIFIED_DURABLE_COOKWARE'],
+
+    ['CLOTHING',
+      /\bbath\s*robes?\b/i,
+      'OUT_OF_SCOPE',
+      'IDENTIFIED_BATHROBE'],
+
 
 
     // Pet supplies remain in scope, including pet toys.
@@ -108,7 +168,7 @@ export function classifyGroceryScope(record: ScopeInput): ScopeResult {
 
     ['HOME_DECOR', /\b(?:mattress(?:es)?|bed frames?)\b/i, 'OUT_OF_SCOPE', 'DURABLE_BEDDING_FURNITURE'],
     ['KITCHENWARE', /\b(?:multi[- ]?pans?|grill pans?|frying pans?|skillets?)\b/i, 'OUT_OF_SCOPE', 'DURABLE_COOKWARE'],
-    ['ELECTRONICS', /^(?:(?:\d{1,2}(?:[\"″]|\s*(?:inches|inch|in))\s*)|(?:computer|gaming|lcd|led)\s+)?monitors?$/i, 'OUT_OF_SCOPE', 'COMPUTER_MONITOR'],
+    ['ELECTRONICS', /^(?:(?:\d{1,2}(?:[\"â€³]|\s*(?:inches|inch|in))\s*)|(?:computer|gaming|lcd|led)\s+)?monitors?$/i, 'OUT_OF_SCOPE', 'COMPUTER_MONITOR'],
     ['PERSONAL_CARE', /\b(?:pads?\s+or\s+liners?|menstrual\s+pads?|panty\s+liners?)\b/i, 'IN_SCOPE', 'FEMININE_HYGIENE'],
     ['HOUSEHOLD', /\b(?:scented oil kit|oil warmer(?:s)?\s+(?:kit|refills?)|air freshener starter kit)\b/i, 'IN_SCOPE', 'AIR_FRESHENER_KIT'],
     ['GROCERY', /\b(?:avocados?|anjou pears?|pears?)\b/i, 'IN_SCOPE', 'FRESH_PRODUCE'],
@@ -116,13 +176,14 @@ export function classifyGroceryScope(record: ScopeInput): ScopeResult {
     ['GROCERY', /\b(?:baking mixes?|cake mixes?|brownie mixes?|muffin mixes?|pancake mixes?)\b/i, 'IN_SCOPE', 'BAKING_MIX'],
     ['GROCERY', /\b(?:charcuterie|prosciutto|soppressata|salami|deli meats?)\b/i, 'IN_SCOPE', 'PREPACKAGED_DELI_MEAT'],
     ['GROCERY', /\bperra\b/i, 'IN_SCOPE', 'FROZEN_DESSERT'],
+
   ];
   for (const [category, rule, status, reason] of b5NameRules) {
     const m = rule.exec(name);
     if (m) return { status, category, reason, matchedRule: 'B5_PRODUCT_NAME', matchEvidence: m[0] };
   }
   // A holiday food with an identified confectionery brand is groceries, unlike a toy advent calendar.
-  if (/\badvent calendars?\b/i.test(name) && /\b(?:reese['’]?s?|hershey['’]?s?|chocolate|candy|sweets?)\b/i.test([name, desc, record.brand ?? ''].join(' '))) {
+  if (/\badvent calendars?\b/i.test(name) && /\b(?:reese['â€™]?s?|hershey['â€™]?s?|chocolate|candy|sweets?)\b/i.test([name, desc, record.brand ?? ''].join(' '))) {
     return { status: 'IN_SCOPE', category: 'GROCERY', reason: 'EDIBLE_SEASONAL_CONFECTIONERY', matchedRule: 'B5_EDIBLE_CALENDAR', matchEvidence: name };
   }
   const phrase = [name, desc].filter(Boolean).join(' | ');

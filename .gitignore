@@ -88,3 +88,18 @@ data/raw/
 
 # Local development archives
 /src/kavyob-6.zip
+
+# Local PostgreSQL backups
+/.local-backups/
+*.dump
+
+# Local runtime and diagnostic exports
+/data/research/living-db/
+/data/research/flipp/
+
+# Local review exports (retain approved JSON files in review/)/apply-phase-b2-schema.mjs
+/data/reference/*.backup.json
+/data/reference/*.geocode-review.csv
+/data/reference/*Address_Audit.csv
+/kavyo-installation-review.zip
+/kavyo-calgary-dev-seed.zip
