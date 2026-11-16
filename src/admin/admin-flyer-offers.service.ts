@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import type { Prisma } from "../generated/prisma/client.js";
+import type { Prisma, Product } from "../generated/prisma/client.js";
 import { FLYER_SOURCE_SYSTEM_NAME } from "../flyers/ingestion/retailers.js";
 import {
   decimalToNumber,
@@ -380,7 +380,7 @@ async function resolveProduct(
     if (!product) {
       throw new BadRequestException("Product not found");
     }
-    return product;
+    return ensureProductImage(tx, product, offer.imageUrl);
   }
 
   if (offer.matchedProductId) {
@@ -388,7 +388,7 @@ async function resolveProduct(
       where: { id: offer.matchedProductId },
     });
     if (product) {
-      return product;
+      return ensureProductImage(tx, product, offer.imageUrl);
     }
   }
 
@@ -403,7 +403,7 @@ async function resolveProduct(
       where: { barcode: dto.barcode },
     });
     if (product) {
-      return product;
+      return ensureProductImage(tx, product, offer.imageUrl);
     }
   }
 
@@ -418,7 +418,7 @@ async function resolveProduct(
     where: { catalogKey },
   });
   if (existing) {
-    return existing;
+    return ensureProductImage(tx, existing, offer.imageUrl);
   }
 
   if (dto.createProduct !== true) {
@@ -436,10 +436,36 @@ async function resolveProduct(
       quantityValue: offer.quantityValue,
       quantityUnit: offer.quantityUnit,
       quantityText: offer.packageSizeText,
+      imageUrl: normalizeImageUrl(offer.imageUrl),
       categories: offer.family,
       isActive: true,
     },
   });
+}
+
+async function ensureProductImage(
+  tx: Prisma.TransactionClient,
+  product: Product,
+  imageUrl: string | null,
+) {
+  const normalized = normalizeImageUrl(imageUrl);
+  if (!normalized || product.imageUrl) {
+    return product;
+  }
+
+  return tx.product.update({
+    where: { id: product.id },
+    data: { imageUrl: normalized },
+  });
+}
+
+function normalizeImageUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/^http:\/\//i, "https://");
 }
 
 async function publishPriceObservation(

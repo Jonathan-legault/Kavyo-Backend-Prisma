@@ -73,6 +73,7 @@ model Product {
   quantityValue Decimal? @map("quantity_value") @db.Decimal(12, 3)
   quantityUnit  String?  @map("quantity_unit") @db.VarChar(30)
   quantityText  String?  @map("quantity_text") @db.VarChar(150)
+  imageUrl      String?  @map("image_url") @db.VarChar(1000)
 
   categories String? @db.Text
 

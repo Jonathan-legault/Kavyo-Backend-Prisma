@@ -70,6 +70,9 @@ describe("normalizeFlyerOffer", () => {
     expect(result.reviewReasons).toContain("MEMBER_PRICE");
     expect(result.reviewReasons).toContain("MULTI_VARIANT");
     expect(result.reviewReasons).toContain("NO_GTIN");
+    expect(result.imageUrl).toBe(
+      "https://f.wishabi.net/page_items/example.jpg",
+    );
     expect(result).toMatchObject({
       promotionType: "MEMBER_PRICE",
       memberProgram: "Scene+",
@@ -82,6 +85,23 @@ describe("normalizeFlyerOffer", () => {
       type: "MEMBER_PRICE",
       requiresLoyaltyCard: true,
     });
+  });
+
+  it("prefers the clean product-detail image over the flyer cutout", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Safeway",
+      flyer,
+      item: item(),
+      detail: detail({
+        image_url:
+          "http://f.wishabi.net/page_pdf_images/24436323/example/x_large",
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result.imageUrl).toBe(
+      "https://f.wishabi.net/page_pdf_images/24436323/example/x_large",
+    );
   });
 
   it("uses the multibuy per-item price for unit-price comparison", () => {

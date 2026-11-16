@@ -62,6 +62,7 @@ describe("Admin flyer offer review (e2e)", () => {
         validFrom: new Date(),
         validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         observedAt: new Date(),
+        imageUrl: "http://f.wishabi.net/page_items/e2e/product.jpg",
         matchKey: `e2e|test|${sequence}|500g|${suffix}`,
         familyKey: "test|100g",
         status: "PENDING_REVIEW",
@@ -165,6 +166,8 @@ describe("Admin flyer offer review (e2e)", () => {
         validFrom: new Date(),
         validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         observedAt: new Date(),
+        imageUrl:
+          "http://f.wishabi.net/page_pdf_images/e2e/cereal-detail.jpg",
         matchKey: `e2e|test|cereal|500g|${suffix}`,
         familyKey: "cereal|100g",
         status: "PENDING_REVIEW",
@@ -353,6 +356,9 @@ describe("Admin flyer offer review (e2e)", () => {
     });
     expect(product.barcode).toBeNull();
     expect(product.catalogKey).toBe(catalogKey);
+    expect(product.imageUrl).toBe(
+      "https://f.wishabi.net/page_pdf_images/e2e/cereal-detail.jpg",
+    );
 
     const observations = await prisma.priceObservation.findMany({
       where: { productId: mainProductId, storeId },
@@ -422,6 +428,11 @@ describe("Admin flyer offer review (e2e)", () => {
   });
 
   it("reuses the same canonical product for a later weekly offer", async () => {
+    await prisma.product.update({
+      where: { id: mainProductId },
+      data: { imageUrl: null },
+    });
+
     const weeklyOffer = await createTestOffer({
       productName: "E2E Test Cereal",
       sourceRecordId: `e2e-weekly-${suffix}`,
@@ -442,6 +453,13 @@ describe("Admin flyer offer review (e2e)", () => {
       .expect(200);
 
     expect(response.body.product.id).toBe(mainProductId);
+
+    const product = await prisma.product.findUniqueOrThrow({
+      where: { id: mainProductId },
+    });
+    expect(product.imageUrl).toBe(
+      "https://f.wishabi.net/page_items/e2e/product.jpg",
+    );
 
     const observations = await prisma.priceObservation.findMany({
       where: { productId: mainProductId, storeId },

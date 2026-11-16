@@ -48,7 +48,7 @@ The backend currently includes:
 - protected admin flyer-review queue with approval, rejection, and needs-info decisions
 - review approval workflow that upserts a canonical product and a retailer-level advertised offer, with optional store-level price observation publication
 - stable `catalogKey` and optional barcode support for idempotent flyer-derived products
-- public product catalogue API with search, category, retailer, pagination, and current flyer-estimate metadata
+- public product catalogue API with search, category, retailer, pagination, product images, and current flyer-estimate metadata
 - basket pricing that distinguishes store-verified observations from retailer-level advertised estimates
 - DTO validation
 - authentication and authorization error handling
@@ -458,6 +458,7 @@ Example response shape:
       "productName": "LIFE AT HOME™ 9 OZ CANDLE, CRANBERRY TEA",
       "brand": "LIFE AT HOME™",
       "quantityText": "9 OZ",
+      "imageUrl": "https://f.wishabi.net/page_pdf_images/example/x_large",
       "category": "GROCERY",
       "verifiedStorePriceCount": 0,
       "currentOfferCount": 1,
@@ -475,6 +476,8 @@ Example response shape:
 ```
 
 A `latestAdvertisedOffer` is an advertised estimate, not a store-verified shelf price. The basket marks these items separately and warns when the flyer market differs from the customer's area.
+
+`imageUrl` is an optional product-detail image discovered through the reviewed flyer data. It is stored on the canonical product, normalized to HTTPS, and reused across weekly offers instead of being replaced by a less-clean flyer cutout. Products without a verified image fall back to the frontend's generated artwork. The frontend also falls back to that artwork if an external image fails to load.
 
 ---
 
@@ -928,7 +931,7 @@ See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md) for the full review wor
 - protected admin flyer-review queue and summary endpoints
 - approval workflow with canonical product upsert, advertised-offer publication, and optional store price publication
 - stable flyer product keys and optional barcodes
-- public product catalogue with current flyer-estimate metadata
+- public product catalogue with product images and current flyer-estimate metadata
 - reviewed flyer offers wired into basket estimates and the frontend product picker
 - automated authentication/user E2E tests
 - automated basket comparison and advertised-offer E2E tests

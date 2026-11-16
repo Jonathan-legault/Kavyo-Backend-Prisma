@@ -42,6 +42,7 @@ describe("Product catalogue (e2e)", () => {
       verifiedStorePriceCount: expect.any(Number),
       currentOfferCount: expect.any(Number),
     });
+    expect(response.body.products[0]).toHaveProperty("imageUrl");
   });
 
   it("searches by product name or brand", async () => {
@@ -57,6 +58,10 @@ describe("Product catalogue (e2e)", () => {
       expect(
         `${product.productName} ${product.brand ?? ""}`.toLowerCase(),
       ).toContain("candle");
+
+      if (product.imageUrl) {
+        expect(product.imageUrl).toMatch(/^https:\/\//);
+      }
 
       if (product.latestAdvertisedOffer) {
         expect(product.latestAdvertisedOffer).toMatchObject({

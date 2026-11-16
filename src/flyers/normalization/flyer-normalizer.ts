@@ -323,7 +323,7 @@ export function normalizeFlyerOffer(
     validFrom: toDate(item.valid_from ?? flyer.valid_from),
     validUntil: toDate(item.valid_to ?? flyer.valid_to),
     observedAt,
-    imageUrl: normalizeUrl(item.cutout_image_url),
+    imageUrl: normalizeUrl(detail.image_url ?? item.cutout_image_url),
     sourceUrl:
       input.sourceUrl ??
       `https://flipp.com/en-ca/calgary-ab/flyer/${flyer.id}`,
