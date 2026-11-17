@@ -23,7 +23,7 @@ The backend currently includes:
 - PostgreSQL database
 - Prisma ORM and migrations
 - database seed data
-- 3 retailers
+- 7 retailers (Flipp-connected plus fixture retailers)
 - 3 Calgary test stores in the portable fixture
 - 5 verified test products
 - 15 verified price observations
@@ -58,7 +58,13 @@ The backend currently includes:
 
 Basket comparison and travel-aware recommendations are implemented for a single store. Split-basket and multi-stop optimization remain future work.
 
-A team member has prepared a verified 95-location Calgary retail dataset with latitude and longitude. It is not yet applied to this repository's local database; the portable fixture still contains three stores so tests remain reproducible. The store comparison engine already reads active `Store` rows, so the larger dataset can be loaded without changing the comparison contract.
+A team member prepared a verified 95-location Calgary retail dataset covering all seven retailers, reviewed and geocoded (latitude/longitude rounded to `Decimal(9,6)`), and it has been applied to the local database. The seed is committed as `scripts/seed-calgary-stores.sql`. It is idempotent: it inserts absent retailers and stores, matches existing stores by normalized address (so the portable fixture's three stores are updated, not duplicated), fills NULL postal/coordinate values without overwriting populated ones, and never deletes records. Re-run it any time with:
+
+```bash
+psql -v ON_ERROR_STOP=1 -f scripts/seed-calgary-stores.sql
+```
+
+The store comparison engine reads active `Store` rows, so the loaded dataset immediately participates in basket comparison without changing the comparison contract. The portable test fixture still contains only three stores so tests remain reproducible.
 
 The local `kavyo_dev` database also contains the product-contract handoff data: 227 products (214 active), 351 advertised offers, and a staged flyer backlog. Staged offers are not published automatically. They must be reviewed, linked to a canonical product, and approved before they can affect the catalogue or basket; offers without a linked product or with an expired validity window are ignored by pricing.
 
