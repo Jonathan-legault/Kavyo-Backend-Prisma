@@ -18,7 +18,9 @@
  *  - Existing products win over new products: offers are linked by
  *    catalogKey, then by exact normalized name + package size. Name-only
  *    matches with a different package size are skipped for manual review so
- *    different SKUs are never merged.
+ *    different SKUs are never merged. Published offers also carry the
+ *    matchKey they were approved under, so an admin relink stays durable
+ *    across weekly cycles even when retailers name the item differently.
  *  - Offers without a stable match key are skipped (no invented identity).
  *  - Approvals go through AdminFlyerOffersService.reviewOffer so the audit
  *    trail (reviewer, decision, notes) is identical to the admin API.
@@ -255,6 +257,49 @@ async function main() {
     entry.exact.push(holder);
     entry.nameOnly.push(holder);
     byName.set(name, entry);
+  }
+
+  // Published offers remember the matchKey they were approved under, so an
+  // admin relink (approving an offer against a different product) stays
+  // durable: next week's offer with the same flyer identity resolves to the
+  // merged product even though its name differs from the product name.
+  const published = (await prisma.advertisedOffer.findMany({
+    where: { validUntil: { gte: new Date() } },
+    select: { rawPayload: true, productId: true },
+  })) as unknown as Array<{ rawPayload: unknown; productId: string }>;
+  const publishedProductIds = [
+    ...new Set(
+      published
+        .filter(
+          (row) =>
+            (row.rawPayload as { matchKey?: unknown } | null)?.matchKey,
+        )
+        .map((row) => row.productId),
+    ),
+  ];
+  const publishedProducts = (await prisma.product.findMany({
+    where: { id: { in: publishedProductIds }, isActive: true },
+    select: {
+      id: true,
+      productName: true,
+      catalogKey: true,
+      quantityValue: true,
+      quantityUnit: true,
+      quantityText: true,
+    },
+  })) as unknown as ProductRow[];
+  const publishedProductById = new Map(
+    publishedProducts.map((product) => [product.id, product]),
+  );
+  for (const row of published) {
+    const matchKey = (row.rawPayload as { matchKey?: unknown } | null)
+      ?.matchKey;
+    if (typeof matchKey !== "string" || matchKey === "") continue;
+    const catalogKey = `FLIPP|${matchKey}`;
+    if (byCatalogKey.has(catalogKey)) continue;
+    const product = publishedProductById.get(row.productId);
+    if (!product) continue;
+    byCatalogKey.set(catalogKey, product);
   }
 
   const adminService = new AdminFlyerOffersService(prisma);

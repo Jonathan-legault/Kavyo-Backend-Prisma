@@ -1016,7 +1016,7 @@ npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy
 npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy --include-limits
 ```
 
-The batch script reuses `AdminFlyerOffersService.reviewOffer`, so the audit trail is identical to a manual review. It links offers to existing products by `catalogKey` (or exact normalized name + package size for legacy rows seeded without a key, whose `catalogKey` is then backfilled) and only creates new products when no confident match exists. Offers whose name matches an existing product but whose package size differs are skipped for manual review, so different SKUs are never merged, and offers without a stable match key are never approved blindly.
+The batch script reuses `AdminFlyerOffersService.reviewOffer`, so the audit trail is identical to a manual review. It links offers to existing products by `catalogKey` (or exact normalized name + package size for legacy rows seeded without a key, whose `catalogKey` is then backfilled) and only creates new products when no confident match exists. Published offers also carry the matchKey they were approved under, so a relink made through the admin review queue stays durable across weekly cycles even when two retailers name the same item differently. Offers whose name matches an existing product but whose package size differs are skipped for manual review, so different SKUs are never merged, and offers without a stable match key are never approved blindly.
 
 Comparison policy:
 
