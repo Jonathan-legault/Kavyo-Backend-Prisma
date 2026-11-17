@@ -148,6 +148,122 @@ describe("normalizeFlyerOffer", () => {
     expect(result.reviewReasons).toContain("MULTIBUY");
   });
 
+  it("keeps a purchase-limited single-unit price out of manual review", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Safeway",
+      flyer: {
+        ...flyer,
+        id: 8203652,
+        merchant: "Safeway",
+        merchant_id: 2126,
+        name: "Flyer",
+      },
+      item: item({
+        id: 1049776976,
+        flyer_id: 8203652,
+        name: "Stagg Chili",
+        brand: "Stagg",
+        price: "3.39",
+      }),
+      detail: detail({
+        id: 1049776976,
+        flyer_id: 8203652,
+        name: "Stagg Chili",
+        description: "425 g",
+        price_text: "$3.39 OVER LIMIT PAY 3.89 EA",
+        disclaimer_text: "LIMIT 4",
+        sale_story: null,
+        sku: null,
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      advertisedPriceAmount: 3.39,
+      status: "NORMALIZED",
+      reviewRequired: false,
+    });
+    expect(result.reviewReasons).toContain("PURCHASE_LIMIT");
+  });
+
+  it("keeps a points-style quantity requirement out of manual review", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Safeway",
+      flyer: {
+        ...flyer,
+        id: 8203652,
+        merchant: "Safeway",
+        merchant_id: 2126,
+        name: "Flyer",
+      },
+      item: item({
+        id: 1049776977,
+        flyer_id: 8203652,
+        name: "Softsoap Hand Soap",
+        brand: "Softsoap",
+        price: "3.50",
+      }),
+      detail: detail({
+        id: 1049776977,
+        flyer_id: 8203652,
+        name: "Softsoap Hand Soap",
+        description: "352 mL",
+        price_text: "$3.50 Get Scene+ 1,000 pts when you buy 3",
+        disclaimer_text: null,
+        sale_story: null,
+        sku: null,
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      advertisedPriceAmount: 3.5,
+      status: "NORMALIZED",
+      reviewRequired: false,
+    });
+    expect(result.reviewReasons).toContain("QUANTITY_REQUIREMENT");
+    expect(result.reviewReasons).not.toContain("MULTIBUY");
+  });
+
+  it("keeps a multi-variant offer with a purchase limit in manual review", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Walmart",
+      flyer: {
+        ...flyer,
+        id: 8203652,
+        merchant: "Walmart",
+        merchant_id: 234,
+        name: "Flyer",
+      },
+      item: item({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade or Powerade",
+        brand: "Gatorade",
+        price: "3.00",
+      }),
+      detail: detail({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade or Powerade",
+        description: "591 mL",
+        price_text: "$3.00 OVER LIMIT PAY 3.49 EA",
+        disclaimer_text: "LIMIT 4",
+        sale_story: null,
+        sku: null,
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      promotionType: "PURCHASE_LIMIT",
+      status: "PENDING_REVIEW",
+      reviewRequired: true,
+    });
+    expect(result.reviewReasons).toContain("MULTI_VARIANT");
+    expect(result.reviewReasons).toContain("PURCHASE_LIMIT");
+  });
+
   it("keeps condition-heavy multibuys in manual review", () => {
     const result = normalizeFlyerOffer({
       retailerName: "Walmart",

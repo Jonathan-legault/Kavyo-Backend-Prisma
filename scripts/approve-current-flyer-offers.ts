@@ -11,6 +11,10 @@
  *    ones (NO_GTIN, POINTS_OFFER) and a per-item price was computed.
  *    Condition-heavy multibuys (member, size-range, multi-variant, ...) stay
  *    blocked.
+ *  - With --include-limits, offers whose only blocking reasons are
+ *    PURCHASE_LIMIT ("limit 4, over limit pay more") or QUANTITY_REQUIREMENT
+ *    (points-style "when you buy 2" bonuses) are approved when a positive
+ *    single-unit price exists and no multibuy quantity/total pair is present.
  *  - Existing products win over new products: offers are linked by
  *    catalogKey, then by exact normalized name + package size. Name-only
  *    matches with a different package size are skipped for manual review so
@@ -23,6 +27,7 @@
  *   npx tsx scripts/approve-current-flyer-offers.ts --dry-run
  *   npx tsx scripts/approve-current-flyer-offers.ts --apply
  *   npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy
+ *   npx tsx scripts/approve-current-flyer-offers.ts --apply --include-limits
  */
 import "dotenv/config";
 import { PrismaService } from "../src/prisma/prisma.service.js";
@@ -32,7 +37,9 @@ import type { Prisma } from "../src/generated/prisma/client.js";
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const includeMultibuy = args.has("--include-multibuy");
-const NOTES = "Batch-approved current flyer offer (auto-validated by normalizer).";
+const includeLimits = args.has("--include-limits");
+const NOTES =
+  "Batch-approved current flyer offer (auto-validated by normalizer).";
 
 /**
  * Review reasons that are acceptable for an auto-approved multibuy:
@@ -41,6 +48,19 @@ const NOTES = "Batch-approved current flyer offer (auto-validated by normalizer)
  */
 const MULTIBUY_REVIEW_REASON_ALLOWLIST = new Set([
   "MULTIBUY",
+  "NO_GTIN",
+  "POINTS_OFFER",
+]);
+
+/**
+ * Review reasons that are acceptable for an auto-approved limited offer:
+ * purchase limits and points-style quantity requirements do not change the
+ * per-item price. Identity and price-semantics reasons (multi-variant,
+ * size ranges, ...) are not on this list and stay in manual review.
+ */
+const LIMITS_REVIEW_REASON_ALLOWLIST = new Set([
+  "PURCHASE_LIMIT",
+  "QUANTITY_REQUIREMENT",
   "NO_GTIN",
   "POINTS_OFFER",
 ]);
@@ -78,6 +98,7 @@ interface OfferRow {
   promotionQuantity: Prisma.Decimal | number | string | null;
   promotionTotalPrice: Prisma.Decimal | number | string | null;
   promotionUnitPrice: Prisma.Decimal | number | string | null;
+  advertisedPriceAmount: Prisma.Decimal | number | string | null;
 }
 
 function toNumber(
@@ -86,6 +107,15 @@ function toNumber(
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasMultibuyQuantityPair(offer: OfferRow): boolean {
+  return (
+    offer.promotionQuantity !== null &&
+    offer.promotionQuantity !== undefined &&
+    offer.promotionTotalPrice !== null &&
+    offer.promotionTotalPrice !== undefined
+  );
 }
 
 function isUsableMultibuyOffer(offer: OfferRow): boolean {
@@ -98,6 +128,18 @@ function isUsableMultibuyOffer(offer: OfferRow): boolean {
     offer.reviewReasons.length > 0 &&
     offer.reviewReasons.every((reason) =>
       MULTIBUY_REVIEW_REASON_ALLOWLIST.has(reason),
+    )
+  );
+}
+
+function isUsableLimitedOffer(offer: OfferRow): boolean {
+  return (
+    offer.reviewRequired &&
+    (toNumber(offer.advertisedPriceAmount) ?? 0) > 0 &&
+    !hasMultibuyQuantityPair(offer) &&
+    offer.reviewReasons.length > 0 &&
+    offer.reviewReasons.every((reason) =>
+      LIMITS_REVIEW_REASON_ALLOWLIST.has(reason),
     )
   );
 }
@@ -128,25 +170,32 @@ async function main() {
     throw new Error("Reviewer admin@kavyo.dev not found. Run scripts/create-admin-user.mjs first.");
   }
 
+  const autoApprovalBranches: Prisma.StagedOfferWhereInput[] = [];
+  if (includeMultibuy) {
+    autoApprovalBranches.push({
+      reviewRequired: true,
+      promotionType: "MULTIBUY",
+      promotionQuantity: { gte: 2 },
+      promotionTotalPrice: { gt: 0 },
+      promotionUnitPrice: { gt: 0 },
+    });
+  }
+  if (includeLimits) {
+    // Broad superset; the exact allowlist check happens in isUsableLimitedOffer.
+    autoApprovalBranches.push({
+      reviewRequired: true,
+      advertisedPriceAmount: { gt: 0 },
+    });
+  }
+
   const offers = (await prisma.stagedOffer.findMany({
     where: {
       validUntil: { gte: new Date() },
       reviewDecision: null,
       matchKey: { not: null },
       advertisedPriceAmount: { gt: 0 },
-      ...(includeMultibuy
-        ? {
-            OR: [
-              { reviewRequired: false },
-              {
-                reviewRequired: true,
-                promotionType: "MULTIBUY",
-                promotionQuantity: { gte: 2 },
-                promotionTotalPrice: { gt: 0 },
-                promotionUnitPrice: { gt: 0 },
-              },
-            ],
-          }
+      ...(autoApprovalBranches.length > 0
+        ? { OR: [{ reviewRequired: false }, ...autoApprovalBranches] }
         : { reviewRequired: false }),
     },
     select: {
@@ -163,15 +212,17 @@ async function main() {
       promotionQuantity: true,
       promotionTotalPrice: true,
       promotionUnitPrice: true,
+      advertisedPriceAmount: true,
     },
     orderBy: [{ retailerName: "asc" }, { productName: "asc" }],
   })) as unknown as OfferRow[];
 
-  const candidateOffers = includeMultibuy
-    ? offers.filter(
-        (offer) => !offer.reviewRequired || isUsableMultibuyOffer(offer),
-      )
-    : offers;
+  const candidateOffers = offers.filter(
+    (offer) =>
+      !offer.reviewRequired ||
+      isUsableMultibuyOffer(offer) ||
+      isUsableLimitedOffer(offer),
+  );
 
   const products = (await prisma.product.findMany({
     where: { isActive: true },
@@ -320,7 +371,9 @@ async function main() {
   console.log(`linked via existing catalogKey: ${linkedCatalogKey}`);
   console.log(`linked via exact name+size match: ${linkedExact}`);
   console.log(`new products created: ${createdNew}`);
-  console.log(`approved multibuy offers (2-for-$5 style): ${approvedMultibuy}`);
+  console.log(
+    `auto-approved beyond the normalizer (multibuy / limits): ${approvedMultibuy}`,
+  );
   console.log(`skipped for size mismatch (manual review): ${skippedSizeMismatch}`);
   console.log(`failures: ${failed}`);
   for (const failure of failures) console.log(`  FAILED ${failure}`);

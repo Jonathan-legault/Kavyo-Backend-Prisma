@@ -233,14 +233,28 @@ export function normalizeFlyerOffer(
     promotion.unitPrice !== null &&
     promotion.unitPrice > 0;
 
+  // Purchase limits ("limit 4, over limit pay more") and points-style
+  // quantity requirements ("200 pts when you buy 2") do not change the
+  // per-item price, so a positive single-unit price is already usable.
+  // Offers that also carry a multibuy quantity/total pair keep their own
+  // rule above and stay out of this carve-out.
+  const limitsUsable =
+    (advertisedPriceAmount ?? 0) > 0 &&
+    !(promotion.quantity !== null && promotion.totalPrice !== null);
+
   const blockingReviewReasons = reviewReasons.filter((reason) =>
     BLOCKING_REVIEW_REASONS.has(reason),
   );
   const reviewRequired =
     blockingReviewReasons.length > 0 &&
     !(
-      multibuyUsable &&
-      blockingReviewReasons.every((reason) => reason === "MULTIBUY")
+      (multibuyUsable &&
+        blockingReviewReasons.every((reason) => reason === "MULTIBUY")) ||
+      (limitsUsable &&
+        blockingReviewReasons.every(
+          (reason) =>
+            reason === "PURCHASE_LIMIT" || reason === "QUANTITY_REQUIREMENT",
+        ))
     );
   const status = reviewRequired ? "PENDING_REVIEW" : "NORMALIZED";
   const matchKey =

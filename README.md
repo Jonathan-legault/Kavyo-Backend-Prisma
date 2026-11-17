@@ -1003,7 +1003,7 @@ The frontend exposes the same workflow at `/admin` for accounts with the ADMIN r
 
 The review endpoint accepts `APPROVE`, `REJECT`, or `NEEDS_INFO`. Approval can match an existing product or create a canonical product with `createProduct: true`. Every approval upserts an `AdvertisedOffer` that the public product catalogue and basket can use as a retailer-level estimate. `publishPrice: true` additionally writes a store-level `PriceObservation` and requires a `storeId`; store-verified observations always outrank advertised estimates. Rejecting or returning an approved offer to `NEEDS_INFO` withdraws both published records. Ambiguous or unsupported promotions are retained with their conditions and excluded from single-unit basket pricing until an administrator resolves them. See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
 
-For weekly cycles, offers that already passed the normalizer (date-valid, `review_required = false`, never reviewed) can be batch-approved without hand-editing every row. Add `--include-multibuy` to also approve usable multibuy offers such as "2 for $5": only offers whose sole blocking reason is `MULTIBUY` with a computable per-item price (plus informational `NO_GTIN`/`POINTS_OFFER` flags) are included; condition-heavy multibuys (member pricing, size ranges, multi-variants) stay in the review queue:
+For weekly cycles, offers that already passed the normalizer (date-valid, `review_required = false`, never reviewed) can be batch-approved without hand-editing every row. Add `--include-multibuy` to also approve usable multibuy offers such as "2 for $5": only offers whose sole blocking reason is `MULTIBUY` with a computable per-item price (plus informational `NO_GTIN`/`POINTS_OFFER` flags) are included; condition-heavy multibuys (member pricing, size ranges, multi-variants) stay in the review queue. Add `--include-limits` to also approve offers whose only blocking reasons are `PURCHASE_LIMIT` ("limit 4, over limit pay more") or points-style `QUANTITY_REQUIREMENT` ("200 pts when you buy 2") — both leave the per-item price unchanged; identity and price-semantics reasons (multi-variant, size ranges, missing sizes) still require a human:
 
 ```bash
 # one-time: create the local dev reviewer account (ADMIN role)
@@ -1013,6 +1013,7 @@ node scripts/create-admin-user.mjs
 npx tsx scripts/approve-current-flyer-offers.ts
 npx tsx scripts/approve-current-flyer-offers.ts --apply
 npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy
+npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy --include-limits
 ```
 
 The batch script reuses `AdminFlyerOffersService.reviewOffer`, so the audit trail is identical to a manual review. It links offers to existing products by `catalogKey` (or exact normalized name + package size for legacy rows seeded without a key, whose `catalogKey` is then backfilled) and only creates new products when no confident match exists. Offers whose name matches an existing product but whose package size differs are skipped for manual review, so different SKUs are never merged, and offers without a stable match key are never approved blindly.
