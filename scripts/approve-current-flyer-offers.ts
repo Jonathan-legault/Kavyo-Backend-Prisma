@@ -3,9 +3,14 @@
  * estimates can feed basket comparison.
  *
  * Safety rules:
- *  - Only offers that are date-valid NOW, already passed normalizer review
- *    (status NORMALIZED, review_required=false) and were never reviewed are
- *    considered.
+ *  - Only offers that are date-valid NOW and were never reviewed are
+ *    considered. By default that means offers that already passed normalizer
+ *    review (status NORMALIZED, review_required=false).
+ *  - With --include-multibuy, "2 for $5"-style multibuy offers are also
+ *    approved when their only review reasons are MULTIBUY plus informational
+ *    ones (NO_GTIN, POINTS_OFFER) and a per-item price was computed.
+ *    Condition-heavy multibuys (member, size-range, multi-variant, ...) stay
+ *    blocked.
  *  - Existing products win over new products: offers are linked by
  *    catalogKey, then by exact normalized name + package size. Name-only
  *    matches with a different package size are skipped for manual review so
@@ -17,6 +22,7 @@
  * Usage from the backend root:
  *   npx tsx scripts/approve-current-flyer-offers.ts --dry-run
  *   npx tsx scripts/approve-current-flyer-offers.ts --apply
+ *   npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy
  */
 import "dotenv/config";
 import { PrismaService } from "../src/prisma/prisma.service.js";
@@ -25,7 +31,19 @@ import type { Prisma } from "../src/generated/prisma/client.js";
 
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
+const includeMultibuy = args.has("--include-multibuy");
 const NOTES = "Batch-approved current flyer offer (auto-validated by normalizer).";
+
+/**
+ * Review reasons that are acceptable for an auto-approved multibuy:
+ * MULTIBUY itself (usable per-item price) plus informational reasons that do
+ * not change the cash price. Anything else keeps the offer in manual review.
+ */
+const MULTIBUY_REVIEW_REASON_ALLOWLIST = new Set([
+  "MULTIBUY",
+  "NO_GTIN",
+  "POINTS_OFFER",
+]);
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
@@ -54,6 +72,34 @@ interface OfferRow {
   quantityValue: Prisma.Decimal | number | string | null;
   quantityUnit: string | null;
   packageSizeText: string | null;
+  reviewRequired: boolean;
+  reviewReasons: string[];
+  promotionType: string | null;
+  promotionQuantity: Prisma.Decimal | number | string | null;
+  promotionTotalPrice: Prisma.Decimal | number | string | null;
+  promotionUnitPrice: Prisma.Decimal | number | string | null;
+}
+
+function toNumber(
+  value: Prisma.Decimal | number | string | null | undefined,
+): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isUsableMultibuyOffer(offer: OfferRow): boolean {
+  return (
+    offer.reviewRequired &&
+    offer.promotionType === "MULTIBUY" &&
+    (toNumber(offer.promotionQuantity) ?? 0) >= 2 &&
+    (toNumber(offer.promotionTotalPrice) ?? 0) > 0 &&
+    (toNumber(offer.promotionUnitPrice) ?? 0) > 0 &&
+    offer.reviewReasons.length > 0 &&
+    offer.reviewReasons.every((reason) =>
+      MULTIBUY_REVIEW_REASON_ALLOWLIST.has(reason),
+    )
+  );
 }
 
 interface ProductRow {
@@ -85,10 +131,23 @@ async function main() {
   const offers = (await prisma.stagedOffer.findMany({
     where: {
       validUntil: { gte: new Date() },
-      reviewRequired: false,
       reviewDecision: null,
       matchKey: { not: null },
       advertisedPriceAmount: { gt: 0 },
+      ...(includeMultibuy
+        ? {
+            OR: [
+              { reviewRequired: false },
+              {
+                reviewRequired: true,
+                promotionType: "MULTIBUY",
+                promotionQuantity: { gte: 2 },
+                promotionTotalPrice: { gt: 0 },
+                promotionUnitPrice: { gt: 0 },
+              },
+            ],
+          }
+        : { reviewRequired: false }),
     },
     select: {
       id: true,
@@ -98,9 +157,21 @@ async function main() {
       quantityValue: true,
       quantityUnit: true,
       packageSizeText: true,
+      reviewRequired: true,
+      reviewReasons: true,
+      promotionType: true,
+      promotionQuantity: true,
+      promotionTotalPrice: true,
+      promotionUnitPrice: true,
     },
     orderBy: [{ retailerName: "asc" }, { productName: "asc" }],
   })) as unknown as OfferRow[];
+
+  const candidateOffers = includeMultibuy
+    ? offers.filter(
+        (offer) => !offer.reviewRequired || isUsableMultibuyOffer(offer),
+      )
+    : offers;
 
   const products = (await prisma.product.findMany({
     where: { isActive: true },
@@ -141,10 +212,11 @@ async function main() {
   let linkedExact = 0;
   let createdNew = 0;
   let skippedSizeMismatch = 0;
+  let approvedMultibuy = 0;
   let failed = 0;
   const failures: string[] = [];
 
-  for (const offer of offers) {
+  for (const offer of candidateOffers) {
     const catalogKey = `FLIPP|${offer.matchKey}`;
     const name = normalizeText(offer.productName);
     const size = normalizeSize(offer.quantityValue, offer.quantityUnit, offer.packageSizeText);
@@ -234,8 +306,9 @@ async function main() {
         byName.set(name, createdEntry);
       }
       console.log(
-        `[${apply ? "APPROVED" : "WOULD APPROVE"} ${disposition}] ${offer.retailerName}: ${offer.productName} [${size}] -> ${product.productName}`,
+        `[${apply ? "APPROVED" : "WOULD APPROVE"} ${disposition}${offer.reviewRequired ? " (multibuy)" : ""}] ${offer.retailerName}: ${offer.productName} [${size}] -> ${product.productName}`,
       );
+      if (offer.reviewRequired) approvedMultibuy++;
     } catch (error) {
       failed++;
       failures.push(`${offer.id} ${offer.productName}: ${error instanceof Error ? error.message : String(error)}`);
@@ -243,10 +316,11 @@ async function main() {
   }
 
   console.log("\n=== summary ===");
-  console.log(`offers considered: ${offers.length}`);
+  console.log(`offers considered: ${candidateOffers.length}`);
   console.log(`linked via existing catalogKey: ${linkedCatalogKey}`);
   console.log(`linked via exact name+size match: ${linkedExact}`);
   console.log(`new products created: ${createdNew}`);
+  console.log(`approved multibuy offers (2-for-$5 style): ${approvedMultibuy}`);
   console.log(`skipped for size mismatch (manual review): ${skippedSizeMismatch}`);
   console.log(`failures: ${failed}`);
   for (const failure of failures) console.log(`  FAILED ${failure}`);

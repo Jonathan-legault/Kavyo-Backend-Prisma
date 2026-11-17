@@ -50,6 +50,12 @@ export interface EligibleAdvertisedOffer {
   unitPrice: number;
   marketMatch: AdvertisedOfferMarketMatch;
   marketRank: number;
+  /** Present when the offer is a usable multibuy such as "2 for $5". */
+  multibuy: {
+    quantity: number;
+    totalPrice: number;
+    unitPrice: number;
+  } | null;
 }
 
 export type AdvertisedOfferEvaluation =
@@ -70,6 +76,15 @@ function conditionObject(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
+}
+
+function readConditionNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function readReviewReasons(
@@ -93,8 +108,10 @@ function readReviewReasons(
 /**
  * A flyer offer is only usable for a basket estimate when its price is
  * current, its conditions are understood, and it is not a member-only,
- * multibuy, price-range, or multi-variant offer that the single-unit basket
- * cannot represent yet.
+ * price-range, or multi-variant offer that the single-unit basket cannot
+ * represent. Multibuys such as "2 for $5" are allowed when a reliable
+ * per-item price can be computed from the promotion; they are returned with
+ * a `multibuy` label so the basket can surface the condition.
  *
  * Market matching is deliberately non-exclusive: a retailer-level offer from a
  * different flyer market is still returned, but ranked below an exact or
@@ -152,15 +169,46 @@ export function evaluateAdvertisedOffer(
     return { eligible: false, reason: "MEMBER_PRICE" };
   }
 
-  if (
+  // A multibuy such as "2 for $5" carries a computable per-item price, so it
+  // can serve as a labelled basket estimate. Multibuys without a usable
+  // quantity/total pair, or stacked with other unresolved conditions, stay
+  // excluded from single-unit basket pricing.
+  const multibuyQuantity = readConditionNumber(conditions.promotionQuantity);
+  const multibuyTotalPrice = readConditionNumber(conditions.promotionTotalPrice);
+  const multibuyUnitPrice = readConditionNumber(conditions.promotionUnitPrice);
+
+  const isMultibuy =
     conditions.isMultibuy === true ||
     promotionType === "MULTIBUY" ||
-    (conditions.quantity !== null &&
-      conditions.quantity !== undefined &&
-      conditions.totalPrice !== null &&
-      conditions.totalPrice !== undefined)
-  ) {
-    return { eligible: false, reason: "MULTIBUY" };
+    (multibuyQuantity !== null && multibuyTotalPrice !== null);
+
+  let multibuy: EligibleAdvertisedOffer["multibuy"] = null;
+  if (isMultibuy) {
+    const derivedUnitPrice =
+      multibuyQuantity !== null &&
+      multibuyQuantity >= 2 &&
+      multibuyTotalPrice !== null &&
+      multibuyTotalPrice > 0
+        ? Math.round((multibuyTotalPrice / multibuyQuantity) * 100) / 100
+        : null;
+    const usableUnitPrice = multibuyUnitPrice ?? derivedUnitPrice;
+
+    if (
+      multibuyQuantity === null ||
+      multibuyQuantity < 2 ||
+      multibuyTotalPrice === null ||
+      multibuyTotalPrice <= 0 ||
+      usableUnitPrice === null ||
+      usableUnitPrice <= 0
+    ) {
+      return { eligible: false, reason: "MULTIBUY" };
+    }
+
+    multibuy = {
+      quantity: multibuyQuantity,
+      totalPrice: multibuyTotalPrice,
+      unitPrice: usableUnitPrice,
+    };
   }
 
   if (
@@ -235,6 +283,7 @@ export function evaluateAdvertisedOffer(
       unitPrice,
       marketMatch,
       marketRank,
+      multibuy,
     },
   };
 }

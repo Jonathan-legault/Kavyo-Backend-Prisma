@@ -66,7 +66,7 @@ describe("advertised offer eligibility", () => {
     expect(future).toEqual({ eligible: false, reason: "NOT_YET_VALID" });
   });
 
-  it("rejects member, multibuy, price-range, and multi-variant offers", () => {
+  it("rejects member, price-range, and multi-variant offers; multibuys need a computable per-item price", () => {
     expect(
       evaluateAdvertisedOffer(
         advertisedOffer({
@@ -92,6 +92,53 @@ describe("advertised offer eligibility", () => {
         {},
       ),
     ).toEqual({ eligible: false, reason: "MULTIBUY" });
+
+    // A usable "2 for $5" multibuy is allowed as a labelled estimate.
+    const cleanMultibuy = evaluateAdvertisedOffer(
+      advertisedOffer({
+        conditionEvidence: {
+          isMultibuy: true,
+          promotionType: "MULTIBUY",
+          promotionQuantity: 2,
+          promotionTotalPrice: 5,
+          promotionUnitPrice: 2.5,
+          reviewReasons: [],
+        },
+      }),
+      now,
+      {},
+    );
+    expect(cleanMultibuy.eligible).toBe(true);
+    if (cleanMultibuy.eligible) {
+      expect(cleanMultibuy.value.unitPrice).toBe(2.5);
+      expect(cleanMultibuy.value.multibuy).toEqual({
+        quantity: 2,
+        totalPrice: 5,
+        unitPrice: 2.5,
+      });
+    }
+
+    // A per-item price is derivable even without promotionUnitPrice.
+    const derivedUnitMultibuy = evaluateAdvertisedOffer(
+      advertisedOffer({
+        conditionEvidence: {
+          promotionQuantity: 2,
+          promotionTotalPrice: 5,
+          reviewReasons: [],
+        },
+      }),
+      now,
+      {},
+    );
+    expect(derivedUnitMultibuy.eligible).toBe(true);
+    if (derivedUnitMultibuy.eligible) {
+      expect(derivedUnitMultibuy.value.unitPrice).toBe(2.5);
+      expect(derivedUnitMultibuy.value.multibuy).toEqual({
+        quantity: 2,
+        totalPrice: 5,
+        unitPrice: 2.5,
+      });
+    }
 
     expect(
       evaluateAdvertisedOffer(

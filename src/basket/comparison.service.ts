@@ -374,6 +374,8 @@ export class BasketComparisonService {
           offerMarketKey: bestOffer.offer.marketKey,
           offerMarketMatch: bestOffer.marketMatch,
           offerPromotionText: bestOffer.offer.promotionText,
+          offerMultibuyQuantity: bestOffer.multibuy?.quantity ?? null,
+          offerMultibuyTotalPrice: bestOffer.multibuy?.totalPrice ?? null,
         });
       }
 
@@ -446,6 +448,14 @@ export class BasketComparisonService {
         count +
         store.items.filter(
           (item) => item.offerMarketMatch === "OTHER_MARKET",
+        ).length,
+      0,
+    );
+    const multibuyOfferCount = comparisons.reduce(
+      (count, store) =>
+        count +
+        store.items.filter(
+          (item) => item.offerMultibuyQuantity !== null,
         ).length,
       0,
     );
@@ -560,6 +570,7 @@ export class BasketComparisonService {
         customerLocation,
         blockedAdvertisedOfferCount,
         otherMarketOfferCount,
+        multibuyOfferCount,
       }),
     };
   }
@@ -799,6 +810,7 @@ export class BasketComparisonService {
     customerLocation: PostalLocation | null;
     blockedAdvertisedOfferCount: number;
     otherMarketOfferCount: number;
+    multibuyOfferCount: number;
   }): string[] {
     const warnings = new Set<string>();
 
@@ -833,6 +845,12 @@ export class BasketComparisonService {
     if (input.otherMarketOfferCount > 0) {
       warnings.add(
         "One or more flyer estimates come from a different postal-code market. The advertised price may not be available at this store.",
+      );
+    }
+
+    if (input.multibuyOfferCount > 0) {
+      warnings.add(
+        "Multibuy prices (for example \"2 for $5\") are per-item estimates that assume buying the promoted quantity. Items bought outside the promoted multiples may ring up at the regular price.",
       );
     }
 

@@ -142,9 +142,49 @@ describe("normalizeFlyerOffer", () => {
       promotionUnitPrice: 2.3333,
       unitPrice: 0.3948,
       unitPriceBasis: "100ml",
-      status: "PENDING_REVIEW",
+      status: "NORMALIZED",
+      reviewRequired: false,
     });
     expect(result.reviewReasons).toContain("MULTIBUY");
+  });
+
+  it("keeps condition-heavy multibuys in manual review", () => {
+    const result = normalizeFlyerOffer({
+      retailerName: "Walmart",
+      flyer: {
+        ...flyer,
+        id: 8203652,
+        merchant: "Walmart",
+        merchant_id: 234,
+        name: "Flyer",
+      },
+      item: item({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade or Powerade",
+        brand: "Gatorade",
+        price: "7.00",
+      }),
+      detail: detail({
+        id: 1049776975,
+        flyer_id: 8203652,
+        name: "Gatorade or Powerade",
+        description: "591 mL",
+        price_text: "3 for $7",
+        disclaimer_text: null,
+        sale_story: null,
+        sku: null,
+      }),
+      observedAt: new Date("2026-10-30T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      promotionType: "MULTIBUY",
+      status: "PENDING_REVIEW",
+      reviewRequired: true,
+    });
+    expect(result.reviewReasons).toContain("MULTIBUY");
+    expect(result.reviewReasons).toContain("MULTI_VARIANT");
   });
 
   it("normalizes a fixed-price multi-pack without a barcode", () => {

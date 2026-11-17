@@ -33,6 +33,8 @@ export interface PriceObservationInput {
   offerMarketKey?: string | null;
   offerMarketMatch?: string | null;
   offerPromotionText?: string | null;
+  offerMultibuyQuantity?: number | null;
+  offerMultibuyTotalPrice?: number | null;
 }
 
 export interface RequestedBasketItem {
@@ -68,6 +70,8 @@ export interface CalculatedBasketItem {
   offerMarketKey: string | null;
   offerMarketMatch: string | null;
   offerPromotionText: string | null;
+  offerMultibuyQuantity: number | null;
+  offerMultibuyTotalPrice: number | null;
 }
 
 export interface MissingBasketProduct {
@@ -296,6 +300,8 @@ export function calculateStoreBasket(
       offerMarketKey: observation.offerMarketKey ?? null,
       offerMarketMatch: observation.offerMarketMatch ?? null,
       offerPromotionText: observation.offerPromotionText ?? null,
+      offerMultibuyQuantity: observation.offerMultibuyQuantity ?? null,
+      offerMultibuyTotalPrice: observation.offerMultibuyTotalPrice ?? null,
     });
   }
 

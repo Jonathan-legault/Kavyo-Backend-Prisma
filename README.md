@@ -725,7 +725,8 @@ This returns the same comparison shape with `"basketId": null`. If `postalCode` 
 - An active sale price is used when the current time is inside its `validFrom`/`validUntil` window.
 - An expired or not-yet-started sale falls back to the regular price. Expired sales produce a warning.
 - If no usable store observation exists, a current advertised offer for the same retailer can be used as a retailer-level estimate.
-- Advertised offers must be date-valid, in CAD, positive, and free of blocking conditions. Member-only, multibuy, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit basket prices.
+- Advertised offers must be date-valid, in CAD, positive, and free of blocking conditions. Member-only, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit basket prices.
+- Multibuy offers (for example "2 for $5") are allowed as per-item estimates when a reliable unit price can be computed from the promotion (quantity ≥ 2, positive total). The item carries the promotion label, the response counts them under `advertisedOfferItemCount`, and a warning notes that items bought outside the promoted multiples may ring up at the regular price. Multibuys without a usable quantity/total pair, and multibuy offers stacked with member/BOGO/coupon/minimum-spend conditions, stay excluded.
 - Verified store observations outrank advertised estimates. The response includes `priceSource`, `priceConfidence`, advertised-offer metadata, and per-store estimate counts.
 - Advertised offers from another postal-code market are included but ranked lower and flagged `OTHER_MARKET`. Expired flyer offers are never used.
 - A store missing any requested product is incomplete and is never recommended as the cheapest store. Missing products are listed explicitly.
@@ -1000,7 +1001,7 @@ PATCH /admin/flyer-offers/:id/review
 
 The review endpoint accepts `APPROVE`, `REJECT`, or `NEEDS_INFO`. Approval can match an existing product or create a canonical product with `createProduct: true`. Every approval upserts an `AdvertisedOffer` that the public product catalogue and basket can use as a retailer-level estimate. `publishPrice: true` additionally writes a store-level `PriceObservation` and requires a `storeId`; store-verified observations always outrank advertised estimates. Rejecting or returning an approved offer to `NEEDS_INFO` withdraws both published records. Ambiguous or unsupported promotions are retained with their conditions and excluded from single-unit basket pricing until an administrator resolves them. See [`docs/flyer-ingestion.md`](docs/flyer-ingestion.md).
 
-For weekly cycles, offers that already passed the normalizer (date-valid, `review_required = false`, never reviewed) can be batch-approved without hand-editing every row:
+For weekly cycles, offers that already passed the normalizer (date-valid, `review_required = false`, never reviewed) can be batch-approved without hand-editing every row. Add `--include-multibuy` to also approve usable multibuy offers such as "2 for $5": only offers whose sole blocking reason is `MULTIBUY` with a computable per-item price (plus informational `NO_GTIN`/`POINTS_OFFER` flags) are included; condition-heavy multibuys (member pricing, size ranges, multi-variants) stay in the review queue:
 
 ```bash
 # one-time: create the local dev reviewer account (ADMIN role)
@@ -1009,6 +1010,7 @@ node scripts/create-admin-user.mjs
 # preview the linking outcome, then approve
 npx tsx scripts/approve-current-flyer-offers.ts
 npx tsx scripts/approve-current-flyer-offers.ts --apply
+npx tsx scripts/approve-current-flyer-offers.ts --apply --include-multibuy
 ```
 
 The batch script reuses `AdminFlyerOffersService.reviewOffer`, so the audit trail is identical to a manual review. It links offers to existing products by `catalogKey` (or exact normalized name + package size for legacy rows seeded without a key, whose `catalogKey` is then backfilled) and only creates new products when no confident match exists. Offers whose name matches an existing product but whose package size differs are skipped for manual review, so different SKUs are never merged, and offers without a stable match key are never approved blindly.
@@ -1024,7 +1026,7 @@ Staged-offer counts change with every flyer cycle. A single cycle can contain se
 
 The frontend discovery surface is `/flyers`. It searches the latest batch, shows exact matches separately from similar products, keeps review flags visible, and stores the search in the URL (`/flyers?q=cheese&status=ALL`). A **Promotion watch** strip loads multibuy, member-price, price-range, and other promotional rows even when the default view is limited to verified prices. Promotion cards show the advertised deal, quantity requirement, per-item calculation (for example, `2 for $5.00` → `$2.50 each`), member/non-member prices, and conditions.
 
-The basket comparison uses current `AdvertisedOffer` rows as retailer-level estimates only when no usable store-level `PriceObservation` exists for that product and store. Verified observations win; offers from another postal-code market are included but ranked lower and flagged `OTHER_MARKET`; expired flyer offers never affect basket totals. Member-only, multibuy, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit sale prices. The frontend product picker reads the public catalogue and labels flyer estimates separately from store prices.
+The basket comparison uses current `AdvertisedOffer` rows as retailer-level estimates only when no usable store-level `PriceObservation` exists for that product and store. Verified observations win; offers from another postal-code market are included but ranked lower and flagged `OTHER_MARKET`; expired flyer offers never affect basket totals. Member-only, price-range, multi-variant, BOGO, free-item, coupon, and minimum-spend offers cannot become single-unit sale prices. Usable multibuy offers ("2 for $5" → $2.50 each) are included as labelled per-item estimates with a basket warning; their prices are still never published as store-verified `PriceObservation` rows. The frontend product picker reads the public catalogue and labels flyer estimates separately from store prices.
 
 **Source terms:** confirm Flipp and retailer terms of use before production use. The ingester uses rate limiting and does not bypass access controls.
 

@@ -221,9 +221,27 @@ export function normalizeFlyerOffer(
     addReviewReason(reason);
   }
 
-  const reviewRequired = reviewReasons.some((reason) =>
+  // A multibuy with a computable per-item price (e.g. "2 for $5" -> $2.50)
+  // can be used directly as a labelled basket estimate, so it does not need
+  // manual review unless some other blocking reason is also present.
+  const multibuyUsable =
+    isMultibuy &&
+    promotion.quantity !== null &&
+    promotion.quantity >= 2 &&
+    promotion.totalPrice !== null &&
+    promotion.totalPrice > 0 &&
+    promotion.unitPrice !== null &&
+    promotion.unitPrice > 0;
+
+  const blockingReviewReasons = reviewReasons.filter((reason) =>
     BLOCKING_REVIEW_REASONS.has(reason),
   );
+  const reviewRequired =
+    blockingReviewReasons.length > 0 &&
+    !(
+      multibuyUsable &&
+      blockingReviewReasons.every((reason) => reason === "MULTIBUY")
+    );
   const status = reviewRequired ? "PENDING_REVIEW" : "NORMALIZED";
   const matchKey =
     !isMultiVariant && !packageSize.isRange && promotion.priceMin === null
