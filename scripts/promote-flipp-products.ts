@@ -34,12 +34,12 @@ const evidenceId = (v: Prisma.JsonValue | null): string | null => {
 async function main() {
   if (!process.env.DATABASE_URL) throw Error('DATABASE_URL missing');
   const url = new URL(process.env.DATABASE_URL);
-  if (url.pathname !== '/kavyo_phase_b_test' || !['localhost', '127.0.0.1'].includes(url.hostname))
+  if (!['/kavyo_phase_b_test','/kavyo_install_test'].includes(url.pathname) || !['localhost', '127.0.0.1'].includes(url.hostname))
     throw Error('SAFETY STOP: only localhost/kavyo_phase_b_test is permitted');
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   try {
     const db = await prisma.$queryRaw<Array<{ db: string }>>`SELECT current_database() AS db`;
-    if (db[0]?.db !== 'kavyo_phase_b_test') throw Error('SAFETY STOP: wrong database');
+    if (!['kavyo_phase_b_test','kavyo_install_test'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: wrong database');
     const source = await prisma.sourceSystem.findUnique({ where: { name: SOURCE_NAME }, select: { id: true } });
     if (!source) throw Error('Missing FLIPP_FLYERS SourceSystem');
     const before = {
