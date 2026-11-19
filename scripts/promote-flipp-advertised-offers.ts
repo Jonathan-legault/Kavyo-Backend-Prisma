@@ -33,12 +33,12 @@ function dataFor(p:PreparedAdvertisedOffer): Prisma.AdvertisedOfferCreateManyInp
 async function main(){
   if(!process.env.DATABASE_URL) throw Error('DATABASE_URL missing');
   const url=new URL(process.env.DATABASE_URL);
-  if(!['localhost','127.0.0.1'].includes(url.hostname)||!['/kavyo_phase_b_test','/kavyo_install_test'].includes(url.pathname))
-    throw Error('SAFETY STOP: only local kavyo_phase_b_test or kavyo_install_test permitted');
+  if(!['localhost','127.0.0.1'].includes(url.hostname)||!['/kavyo_phase_b_test','/kavyo_install_test','/kavyo_dev'].includes(url.pathname))
+    throw Error('SAFETY STOP: only approved local Kavyo databases permitted');
   const prisma=new PrismaClient({adapter:new PrismaPg({connectionString:process.env.DATABASE_URL})});
   try{
     const db=await prisma.$queryRaw<Array<{db:string}>>`SELECT current_database() AS db`;
-    if(!['kavyo_phase_b_test','kavyo_install_test'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: wrong database');
+    if(!['kavyo_phase_b_test','kavyo_install_test','kavyo_dev'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: wrong database');
     const src=await prisma.sourceSystem.findUnique({where:{name:'FLIPP_FLYERS'},select:{id:true}});
     if(!src) throw Error('FLIPP_FLYERS source system not found');
     const before={staged:await prisma.stagedOffer.count(),advertised:await prisma.advertisedOffer.count(),

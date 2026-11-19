@@ -1,5 +1,5 @@
 /** Phase B.4: canonical Product creation and AdvertisedOffer linking.
- * DRY-RUN by default. --write only permits localhost/kavyo_phase_b_test.
+ * DRY-RUN by default. Writes require --write --backup-confirmed on an approved local database.
  * No raw offers, staged rows, price observations or old Product attributes are modified.
  */
 import 'dotenv/config';
@@ -11,6 +11,18 @@ import { planProductPromotion, type ProductPromotionCandidate, type PromotionEvi
 
 const args = process.argv.slice(2);
 const write = args.includes('--write');
+const allowedFlags = new Set(['--write', '--backup-confirmed']);
+for (let i = 0; i < args.length; i++) {
+  const value = args[i];
+  if (value === '--limit') {
+    if (i + 1 >= args.length) throw Error('--limit requires a value');
+    i++;
+  } else if (!allowedFlags.has(value) && !value.startsWith('--limit=')) {
+    throw Error(`Unknown argument: ${value}`);
+  }
+}
+if (write && !args.includes('--backup-confirmed'))
+  throw Error('SAFETY STOP: --write requires --backup-confirmed');
 function arg(name: string) {
   const i = args.indexOf('--' + name);
   return i >= 0 ? args[i + 1] : args.find(a => a.startsWith('--' + name + '='))?.slice(name.length + 3);
@@ -34,12 +46,12 @@ const evidenceId = (v: Prisma.JsonValue | null): string | null => {
 async function main() {
   if (!process.env.DATABASE_URL) throw Error('DATABASE_URL missing');
   const url = new URL(process.env.DATABASE_URL);
-  if (!['/kavyo_phase_b_test','/kavyo_install_test'].includes(url.pathname) || !['localhost', '127.0.0.1'].includes(url.hostname))
-    throw Error('SAFETY STOP: only localhost/kavyo_phase_b_test is permitted');
+  if (!['/kavyo_phase_b_test','/kavyo_install_test','/kavyo_dev'].includes(url.pathname) || !['localhost', '127.0.0.1'].includes(url.hostname))
+    throw Error('SAFETY STOP: only approved local Kavyo databases are permitted');
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
   try {
     const db = await prisma.$queryRaw<Array<{ db: string }>>`SELECT current_database() AS db`;
-    if (!['kavyo_phase_b_test','kavyo_install_test'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: wrong database');
+    if (!['kavyo_phase_b_test','kavyo_install_test','kavyo_dev'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: wrong database');
     const source = await prisma.sourceSystem.findUnique({ where: { name: SOURCE_NAME }, select: { id: true } });
     if (!source) throw Error('Missing FLIPP_FLYERS SourceSystem');
     const before = {
@@ -187,7 +199,7 @@ async function main() {
         'Only product, product_evidence, and advertised_offers.product_id may change in WRITE mode.',
         'Existing Product attributes are never overwritten by this importer.',
         'Unknown/scope-REVIEW offers remain durable, unlinked advertisements.',
-        'Importer is limited to localhost/kavyo_phase_b_test; concurrency guard applies to this importer only.',
+        'Importer is limited to approved local Kavyo databases; concurrency guard applies to this importer only.',
       ], generatedAt: new Date().toISOString()
     };
     const dir = resolve('data/research/living-db'); await mkdir(dir, { recursive: true });

@@ -167,7 +167,7 @@ export function classifyGroceryScope(record: ScopeInput): ScopeResult {
       'PACKAGED_MARGARINE'],
 
     ['HOME_DECOR', /\b(?:mattress(?:es)?|bed frames?)\b/i, 'OUT_OF_SCOPE', 'DURABLE_BEDDING_FURNITURE'],
-    ['KITCHENWARE', /\b(?:multi[- ]?pans?|grill pans?|frying pans?|skillets?)\b/i, 'OUT_OF_SCOPE', 'DURABLE_COOKWARE'],
+    ['KITCHENWARE', /\b(?:sauce[\s-]?pans?|multi[- ]?pans?|grill pans?|frying pans?|skillets?)\b/i, 'OUT_OF_SCOPE', 'DURABLE_COOKWARE'],
     ['ELECTRONICS', /^(?:(?:\d{1,2}(?:[\"â€³]|\s*(?:inches|inch|in))\s*)|(?:computer|gaming|lcd|led)\s+)?monitors?$/i, 'OUT_OF_SCOPE', 'COMPUTER_MONITOR'],
     ['PERSONAL_CARE', /\b(?:pads?\s+or\s+liners?|menstrual\s+pads?|panty\s+liners?)\b/i, 'IN_SCOPE', 'FEMININE_HYGIENE'],
     ['HOUSEHOLD', /\b(?:scented oil kit|oil warmer(?:s)?\s+(?:kit|refills?)|air freshener starter kit)\b/i, 'IN_SCOPE', 'AIR_FRESHENER_KIT'],

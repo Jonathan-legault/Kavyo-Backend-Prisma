@@ -128,15 +128,15 @@ function prepare(r:RecordRow,observedAt:Date):Candidate {
 async function main(){
   if(!process.env.DATABASE_URL) throw Error('DATABASE_URL missing');
   const u=new URL(process.env.DATABASE_URL);
-  if(!['localhost','127.0.0.1'].includes(u.hostname) || !['/kavyo_phase_b_test','/kavyo_install_test'].includes(u.pathname))
-    throw Error('SAFETY STOP: only local kavyo_phase_b_test or kavyo_install_test is permitted');
+  if(!['localhost','127.0.0.1'].includes(u.hostname) || !['/kavyo_phase_b_test','/kavyo_install_test','/kavyo_dev'].includes(u.pathname))
+    throw Error('SAFETY STOP: only approved local Kavyo databases is permitted');
   const {records,observedAt}=loadCapture();
   // Verify ALL source details before opening a write path.
   const prepared=records.map(r=>prepare(r,observedAt));
   const prisma=new PrismaClient({adapter:new PrismaPg({connectionString:process.env.DATABASE_URL})});
   try {
     const db=await prisma.$queryRaw<Array<{db:string}>>`SELECT current_database() AS db`;
-    if(!['kavyo_phase_b_test','kavyo_install_test'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: database identity mismatch');
+    if(!['kavyo_phase_b_test','kavyo_install_test','kavyo_dev'].includes(db[0]?.db ?? '')) throw Error('SAFETY STOP: database identity mismatch');
     const source=await prisma.sourceSystem.findUnique({where:{name:'FLIPP_FLYERS'},select:{id:true}});
     const knownFlyers=source ? await prisma.flyer.findMany({where:{sourceSystemId:source.id},select:{id:true,externalId:true}}):[];
     const dbFlyerIds=new Map(knownFlyers.map(f=>[f.externalId,f.id]));
@@ -192,7 +192,12 @@ async function main(){
       !equal(existing.get(p.sourceKey)!.rawPayload, p.row.rawPayload));
     const noPayloadDifferenceAfterMetadataExclusion = revisitable.length - changed.length;
     const changedKeyFrequency: Record<string,number> = {};
-    const sampleDifferences = changed.slice(0,12).map(p => {
+    const normalizedKeysSet = new Set(normalizedChanged.map(p => p.sourceKey));
+    const prioritizedChanges = [
+      ...normalizedChanged,
+      ...changed.filter(p => !normalizedKeysSet.has(p.sourceKey))
+    ];
+    const sampleDifferences = prioritizedChanges.slice(0,12).map(p => {
       const prior = existing.get(p.sourceKey)!;
       const normalizedKeys = differingTopLevelKeys(prior.normalizedPayload, p.row.normalizedPayload);
       const rawKeys = differingTopLevelKeys(prior.rawPayload, p.row.rawPayload);

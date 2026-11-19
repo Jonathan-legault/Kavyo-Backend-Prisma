@@ -147,6 +147,13 @@ export function productIdentityAmbiguity(name: string, brand: string | null, des
 export function planProductPromotion(e: PromotionEvidence): ProductPromotionPlan {
   const hold = (...reasons: string[]): ProductPromotionHold => ({ decision:'HOLD',offerId:e.offerId,stagedOfferId:e.stagedOfferId,reasons });
   if (!e.offerId || !e.stagedOfferId || !e.stableKey || !e.sourceSystemId) return hold('SOURCE_EVIDENCE_MISSING');
+  // A variable-weight or variable-volume advertisement is not an exact SKU identity.
+  // Check source text even when the structured quantity contains an exact number.
+  const rangePattern = /\b\d+(?:[.,]\d+)?\s*(?:to|-|–|—)\s*\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l)\b/i;
+  if ([e.productName, e.descriptionText, e.packageSizeText].some(
+    text => rangePattern.test(text ?? '')
+  )) return hold('VARIABLE_PACKAGE_SIZE_RANGE');
+
   const scope = classifyGroceryScope({name:e.productName,description:e.descriptionText,brand:e.brand});
   if (scope.status !== 'IN_SCOPE') return hold(`SCOPE_${scope.status}_${scope.reason}`);
   const ambiguity = productIdentityAmbiguity(e.productName, e.brand, e.descriptionText);
@@ -176,7 +183,10 @@ export function planProductPromotion(e: PromotionEvidence): ProductPromotionPlan
       && !variant && /\b(?:flavou?r|variety|formulation)\b/i.test(description)) {
     return hold('VARIANT_DESCRIPTION_REQUIRES_REVIEW');
   }
-  const name = clean(resolvedProductName);
+  // Equivalent measurement spacing must not create distinct canonical identities.
+  // Keep this local to fingerprint construction, not general scope/variant logic.
+  const name = clean(resolvedProductName)
+    .replace(/\b(\d+(?:[.,]\d+)?)\s+(kg|g|ml|l)\b/g, '$1$2');
   const brand = clean(e.brand);
   if (!name || (!brand && !produce)) return hold('IDENTITY_INCOMPLETE');
   // Branded fingerprints are unchanged from B.4; only unbranded produce gets a new namespace.
