@@ -110,6 +110,8 @@ async function main() {
           for (const reason of plan.reasons) hold(offer.id, reason);
           continue;
         }
+        // A source identity is required to select the same representative across fresh databases.
+        if (!row.sourceRecordId?.trim()) { hold(offer.id, 'SOURCE_RECORD_ID_MISSING'); continue; }
         eligible++;
         if (offer.productId) alreadyLinked++;
         const list = groups.get(plan.fingerprint) ?? [];
