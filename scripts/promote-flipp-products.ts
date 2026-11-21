@@ -7,7 +7,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Prisma } from '../src/generated/prisma/client.js';
-import { planProductPromotion, type ProductPromotionCandidate, type PromotionEvidence } from '../src/ingestion/living-catalog/product-promotion-plan.js';
+import { planProductPromotion, type PromotionEvidence } from '../src/ingestion/living-catalog/product-promotion-plan.js';
+import { selectCanonicalRepresentative, type SourcedProductCandidate } from '../src/ingestion/living-catalog/canonical-representative.js';
 
 const args = process.argv.slice(2);
 const write = args.includes('--write');
@@ -35,6 +36,7 @@ const SOURCE_NAME = 'FLIPP_FLYERS';
 type Advert = {
   id: string; stableKey: string; sourceSystemId: string; productId: string | null;
   conditionEvidence: Prisma.JsonValue | null;
+  flyerExternalId: string; marketKey: string;
 };
 const evidenceId = (v: Prisma.JsonValue | null): string | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
@@ -63,7 +65,7 @@ async function main() {
     const knownProducts = await prisma.productEvidence.count({ where: { sourceSystemId: source.id, evidenceType: 'CANONICAL_IDENTITY' } });
     if (write && before.products > 0 && knownProducts === 0) throw Error('SAFETY STOP: nonempty product catalog has no B4 identity evidence');
 
-    const groups = new Map<string, ProductPromotionCandidate[]>();
+    const groups = new Map<string, SourcedProductCandidate[]>();
     const holds = new Map<string, number>();
     const holdSamples: Array<{ offerId: string; reason: string }> = [];
     let analyzed = 0, eligible = 0, alreadyLinked = 0, missingStaging = 0;
@@ -77,14 +79,14 @@ async function main() {
       const page = await prisma.advertisedOffer.findMany({
         where: { sourceSystemId: source.id }, orderBy: { id: 'asc' }, take: Math.min(200, limit === 0 ? 200 : limit - analyzed),
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: { id: true, stableKey: true, sourceSystemId: true, productId: true, conditionEvidence: true },
+        select: { id: true, stableKey: true, sourceSystemId: true, productId: true, conditionEvidence: true, flyerExternalId: true, marketKey: true },
       }) as Advert[];
       if (!page.length) break;
       const ids = page.map(x => evidenceId(x.conditionEvidence)).filter((x): x is string => x !== null);
       const staged = await prisma.stagedOffer.findMany({
         where: { id: { in: ids }, sourceSystemId: source.id },
         select: {
-          id: true, sourceSystemId: true, productName: true, brand: true, descriptionText: true,
+          id: true, sourceRecordId: true, sourceSystemId: true, productName: true, brand: true, descriptionText: true,
           packageSizeText: true, quantityValue: true, quantityUnit: true,
           isMultiVariant: true, isPriceRange: true, quantityIsApproximate: true
         },
@@ -111,16 +113,18 @@ async function main() {
         eligible++;
         if (offer.productId) alreadyLinked++;
         const list = groups.get(plan.fingerprint) ?? [];
-        list.push(plan); groups.set(plan.fingerprint, list);
+        list.push({ ...plan, sourceRecordId: row.sourceRecordId, flyerExternalId: offer.flyerExternalId, marketKey: offer.marketKey });
+        groups.set(plan.fingerprint, list);
       }
       cursor = page[page.length - 1].id;
     }
     // Reject false merges: one fingerprint should never represent differing literal package
     // descriptions that imply a multipack/range (planner already screens these).
-    const previews = [...groups.entries()].slice(0, 25).map(([fingerprint, offers]) => ({
-      fingerprint: fingerprint.slice(0, 16), productName: offers[0].productName, brand: offers[0].brand,
-      quantity: offers[0].quantityText, offers: offers.length,
-    }));
+    const previews = [...groups.entries()].slice(0, 25).map(([fingerprint, offers]) => {
+      const seed = selectCanonicalRepresentative(offers);
+      return { fingerprint: fingerprint.slice(0, 16), productName: seed.productName, brand: seed.brand,
+        quantity: seed.quantityText, offers: offers.length };
+    });
     let createdProducts = 0, reusedProducts = 0, newLinks = 0, existingLinks = 0, conflicts = 0;
     if (write) {
       for (const [fingerprint, candidates] of groups) {
@@ -142,7 +146,7 @@ async function main() {
             return { kind: 'CONFLICT' as const, links: 0 };
           let created = false;
           if (!productId) {
-            const seed = candidates[0];
+            const seed = selectCanonicalRepresentative(candidates);
             const product = await tx.product.create({
               data: {
                 barcode: null, productName: seed.productName, brand: seed.brand,
