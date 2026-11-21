@@ -9,6 +9,11 @@ import {
   type NormalizedQuantityUnit,
 } from "./package-size.js";
 
+import {
+  parsePromotion,
+  type PromotionType,
+} from "./promotion.js";
+
 const FAMILY_PATTERNS: Array<[string, RegExp]> = [
   [
     "nut_butter",
@@ -94,6 +99,17 @@ export interface NormalizedFlyerOffer {
   unitPriceBasis: "100g" | "100ml" | "each" | null;
   currency: "CAD";
   promotionText: string | null;
+  promotionType: PromotionType;
+  promotionQuantity: number | null;
+  promotionTotalPrice: number | null;
+  promotionUnitPrice: number | null;
+  memberProgram: string | null;
+  memberPriceAmount: number | null;
+  nonMemberPriceAmount: number | null;
+  priceMinAmount: number | null;
+  priceMaxAmount: number | null;
+  conditionsText: string | null;
+  promotionConditions: Record<string, unknown>;
   validFrom: Date | null;
   validUntil: Date | null;
   observedAt: Date;
@@ -130,6 +146,30 @@ export function normalizeFlyerOffer(
 
   const advertisedPriceAmount = parsePriceAmount(item.price);
   const regularPriceAmount = parseRegularPrice(disclaimerText);
+  // Supplementary structured promotion evidence.
+  // Does not override validated pricing or review decisions.
+  const promotion = parsePromotion({
+    productName: item.name,
+    descriptionText,
+    priceText,
+    saleStory,
+    disclaimerText,
+    itemPrice: advertisedPriceAmount,
+    regularPriceAmount,
+    currentPriceRange: detail.current_price_range ?? null,
+    originalPriceRange: detail.original_price_range ?? null,
+    inStoreOnly: detail.in_store_only ?? null,
+  });
+
+  const conditionsText =
+    promotion.conditions.length > 0
+      ? promotion.conditions.join(" / ")
+      : null;
+
+  const promotionConditions: Record<string, unknown> = {
+    ...promotion,
+    quantityRequirement: promotion.quantity,
+  };
   const packageSize = parsePackageSize(descriptionText, item.name);
   const priceWeight = parsePriceWeight(descriptionText, priceText);
   const isMultiVariant = detectMultiVariant(item.name, descriptionText);
@@ -252,6 +292,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
+    promotionType: promotion.type,
+    promotionQuantity: promotion.quantity,
+    promotionTotalPrice: promotion.totalPrice,
+    promotionUnitPrice: promotion.unitPrice,
+    memberProgram: promotion.memberProgram,
+    memberPriceAmount: promotion.memberPriceAmount,
+    nonMemberPriceAmount: promotion.nonMemberPriceAmount,
+    priceMinAmount: promotion.priceMin,
+    priceMaxAmount: promotion.priceMax,
+    conditionsText,
+    promotionConditions,
     unitPrice: safeUnitPrice?.value ?? null,
     unitPriceBasis: safeUnitPrice?.basis ?? null,
     validFrom: item.valid_from ?? flyer.valid_from,
@@ -281,6 +332,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
+    promotionType: promotion.type,
+    promotionQuantity: promotion.quantity,
+    promotionTotalPrice: promotion.totalPrice,
+    promotionUnitPrice: promotion.unitPrice,
+    memberProgram: promotion.memberProgram,
+    memberPriceAmount: promotion.memberPriceAmount,
+    nonMemberPriceAmount: promotion.nonMemberPriceAmount,
+    priceMinAmount: promotion.priceMin,
+    priceMaxAmount: promotion.priceMax,
+    conditionsText,
+    promotionConditions,
     unitPrice: safeUnitPrice?.value ?? null,
     unitPriceBasis: safeUnitPrice?.basis ?? null,
     currency: "CAD",

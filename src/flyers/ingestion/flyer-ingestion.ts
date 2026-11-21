@@ -10,7 +10,6 @@ import {
   FLYER_RETAILERS,
   FLYER_SOURCE_BASE_URL,
   FLYER_SOURCE_SYSTEM_NAME,
-  findFlyerRetailerByMerchantId,
 } from "./retailers.js";
 
 const GROCERY_CATEGORY_PATTERN = /grocer/i;
@@ -432,6 +431,17 @@ function toCreateInput(
     currency: offer.currency,
     promotionText: offer.promotionText,
     offerComment: offer.offerComment,
+    promotionType: truncate(offer.promotionType, 30),
+    promotionQuantity: offer.promotionQuantity,
+    promotionTotalPrice: offer.promotionTotalPrice,
+    promotionUnitPrice: offer.promotionUnitPrice,
+    memberProgram: truncate(offer.memberProgram, 100),
+    memberPriceAmount: offer.memberPriceAmount,
+    nonMemberPriceAmount: offer.nonMemberPriceAmount,
+    priceMinAmount: offer.priceMinAmount,
+    priceMaxAmount: offer.priceMaxAmount,
+    conditionsText: offer.conditionsText,
+    promotionConditions: offer.promotionConditions as Prisma.InputJsonValue,
     validFrom: offer.validFrom,
     validUntil: offer.validUntil,
     observedAt: offer.observedAt,

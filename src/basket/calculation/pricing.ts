@@ -2,6 +2,10 @@ export type EffectivePriceType = "SALE" | "REGULAR";
 
 export type SaleStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED" | "NONE";
 
+export type PriceSource = "PRICE_OBSERVATION" | "ADVERTISED_OFFER";
+
+export type PriceConfidence = "STORE_VERIFIED" | "RETAILER_ADVERTISED";
+
 /**
  * Prisma returns DECIMAL columns as Decimal objects. Accept anything that can
  * be coerced to a finite, non-negative number so the calculation layer stays
@@ -23,6 +27,14 @@ export interface PriceObservationInput {
   observedAt: Date;
   validFrom: Date | null;
   validUntil: Date | null;
+  priceSource?: PriceSource;
+  advertisedOfferId?: string | null;
+  offerRetailerName?: string | null;
+  offerMarketKey?: string | null;
+  offerMarketMatch?: string | null;
+  offerPromotionText?: string | null;
+  offerMultibuyQuantity?: number | null;
+  offerMultibuyTotalPrice?: number | null;
 }
 
 export interface RequestedBasketItem {
@@ -51,6 +63,15 @@ export interface CalculatedBasketItem {
   salePrice: number | null;
   observedAt: Date;
   priceAgeHours: number;
+  priceSource: PriceSource;
+  priceConfidence: PriceConfidence;
+  advertisedOfferId: string | null;
+  offerRetailerName: string | null;
+  offerMarketKey: string | null;
+  offerMarketMatch: string | null;
+  offerPromotionText: string | null;
+  offerMultibuyQuantity: number | null;
+  offerMultibuyTotalPrice: number | null;
 }
 
 export interface MissingBasketProduct {
@@ -70,6 +91,8 @@ export interface StoreBasketCalculation {
   oldestObservedAt: Date | null;
   hasExpiredSale: boolean;
   hasStalePrice: boolean;
+  advertisedItemCount: number;
+  hasAdvertisedEstimate: boolean;
 }
 
 export const STALE_PRICE_HOURS = 24;
@@ -174,9 +197,30 @@ export function calculateStoreBasket(
       continue;
     }
 
+    // An observation with no usable price must not hide a valid advertised
+    // offer for the same product at this store.
+    if (!selectEffectivePrice(observation, now)) {
+      continue;
+    }
+
     const current = latestByProduct.get(observation.productId);
 
-    if (!current || observation.observedAt > current.observedAt) {
+    if (!current) {
+      latestByProduct.set(observation.productId, observation);
+      continue;
+    }
+
+    const currentSource = current.priceSource ?? "PRICE_OBSERVATION";
+    const candidateSource = observation.priceSource ?? "PRICE_OBSERVATION";
+    const candidateIsVerified =
+      candidateSource === "PRICE_OBSERVATION" &&
+      currentSource === "ADVERTISED_OFFER";
+
+    if (
+      candidateIsVerified ||
+      (currentSource === candidateSource &&
+        observation.observedAt > current.observedAt)
+    ) {
       latestByProduct.set(observation.productId, observation);
     }
   }
@@ -187,6 +231,7 @@ export function calculateStoreBasket(
   let oldestObservedAt: Date | null = null;
   let hasExpiredSale = false;
   let hasStalePrice = false;
+  let advertisedItemCount = 0;
 
   for (const requested of requestedItems) {
     const observation = latestByProduct.get(requested.productId);
@@ -206,6 +251,8 @@ export function calculateStoreBasket(
 
     const lineTotal = roundMoney(effectivePrice.unitPrice * requested.quantity);
     const age = priceAgeHours(observation.observedAt, now);
+    const priceSource = observation.priceSource ?? "PRICE_OBSERVATION";
+    const isAdvertised = priceSource === "ADVERTISED_OFFER";
 
     productSubtotal += effectivePrice.unitPrice * requested.quantity;
 
@@ -217,8 +264,15 @@ export function calculateStoreBasket(
       hasExpiredSale = true;
     }
 
-    if (age > STALE_PRICE_HOURS) {
+    // A flyer offer is expected to be older than a live shelf observation.
+    // Its age is reported separately and must not be described as a stale
+    // store price.
+    if (!isAdvertised && age > STALE_PRICE_HOURS) {
       hasStalePrice = true;
+    }
+
+    if (isAdvertised) {
+      advertisedItemCount += 1;
     }
 
     items.push({
@@ -239,6 +293,15 @@ export function calculateStoreBasket(
           : roundMoney(effectivePrice.salePrice),
       observedAt: observation.observedAt,
       priceAgeHours: age,
+      priceSource,
+      priceConfidence: isAdvertised ? "RETAILER_ADVERTISED" : "STORE_VERIFIED",
+      advertisedOfferId: observation.advertisedOfferId ?? null,
+      offerRetailerName: observation.offerRetailerName ?? null,
+      offerMarketKey: observation.offerMarketKey ?? null,
+      offerMarketMatch: observation.offerMarketMatch ?? null,
+      offerPromotionText: observation.offerPromotionText ?? null,
+      offerMultibuyQuantity: observation.offerMultibuyQuantity ?? null,
+      offerMultibuyTotalPrice: observation.offerMultibuyTotalPrice ?? null,
     });
   }
 
@@ -253,6 +316,8 @@ export function calculateStoreBasket(
     oldestObservedAt,
     hasExpiredSale,
     hasStalePrice,
+    advertisedItemCount,
+    hasAdvertisedEstimate: advertisedItemCount > 0,
   };
 }
 

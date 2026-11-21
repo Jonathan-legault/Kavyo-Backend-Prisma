@@ -6,6 +6,8 @@ import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { BasketModule } from './basket/basket.module.js';
 import { FlyersModule } from './flyers/flyers.module.js';
+import { AdminModule } from './admin/admin.module.js';
+import { ProductsModule } from './products/products.module.js';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { FlyersModule } from './flyers/flyers.module.js';
     UsersModule,
     BasketModule,
     FlyersModule,
+    AdminModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

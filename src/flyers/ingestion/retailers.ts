@@ -23,6 +23,26 @@ export const FLYER_RETAILERS: FlyerRetailerConfig[] = [
     name: "Calgary Co-op",
     website: "https://www.calgarycoop.com",
   },
+  {
+    merchantId: 2271,
+    name: "Real Canadian Superstore",
+    website: "https://www.realcanadiansuperstore.ca",
+  },
+  {
+    merchantId: 2062,
+    name: "Save-On-Foods",
+    website: "https://www.saveonfoods.com",
+  },
+  {
+    merchantId: 2072,
+    name: "Sobeys",
+    website: "https://www.sobeys.com",
+  },
+  {
+    merchantId: 2332,
+    name: "No Frills",
+    website: "https://www.nofrills.ca",
+  },
 ];
 
 export function findFlyerRetailerByMerchantId(

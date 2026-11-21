@@ -68,6 +68,7 @@ export interface FlippItemDetail {
   sku?: string | null;
   current_price_range?: [number, number] | null;
   original_price_range?: [number, number] | null;
+  image_url?: string | null;
   in_store_only?: boolean;
   category?: string | null;
   timezone?: number;
