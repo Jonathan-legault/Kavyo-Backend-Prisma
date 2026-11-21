@@ -56,7 +56,7 @@ const FAMILY_PATTERNS: Array<[string, RegExp]> = [
     "snacks",
     /\b(?:cookies|crackers|granola bars?|chocolate|brownies|candy|tarts?|cakes?|pies?|pastries?|samosas?|spring rolls?|peanut butter cups?|snack size)\b/i,
   ],
-  ["produce", /\b(?:avocados?|mangoes?|oranges?|grapes?|apples?|bananas?|tomatoes?|potatoes?|onions?|broccoli|mushrooms?|peppers?|cucumbers?|lettuce|salad|limes?|lemons?|berries|strawberries|blueberries|peaches?|pears?|pineapple|watermelon|zucchini|eggplant)\b/i],
+  ["produce", /\b(?:avocados?|mangoes?|oranges?|grapes?|apples?(?!\s+air[\s-]?tags?\b)|bananas?|tomatoes?|potatoes?|onions?|broccoli|mushrooms?|peppers?|cucumbers?|lettuce|salad|limes?|lemons?|berries|strawberries|blueberries|peaches?|pears?|pineapple|watermelon|zucchini|eggplant)\b/i],
   ["household", /\b(?:detergent|tissue|paper towels?|toilet paper|cleaner|dish soap|laundry)\b/i],
   ["personal_care", /\b(?:shampoo|conditioner|body wash|bubble bath|toothpaste|deodorant|razors?)\b/i],
 ];

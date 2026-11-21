@@ -63,6 +63,12 @@ export function classifyGroceryScope(record: ScopeInput): ScopeResult {
   // B5_1_PRODUCT_RULES: audited product-name classification, not retailer/brand classification.
   // Prioritize identified product types; avoid broad words like "monitor", "kit" and "calendar".
   const b5NameRules: Array<[string, RegExp, ScopeStatus, string]> = [
+    [
+      'ELECTRONICS',
+      /\bair[\s-]?tags?\b/i,
+      'OUT_OF_SCOPE',
+      'IDENTIFIED_BLUETOOTH_TRACKER',
+    ],
 
     // PRIORITY: Gnocchi is food, even when described as "skillet gnocchi".
     [
