@@ -9,6 +9,11 @@ import {
   type NormalizedQuantityUnit,
 } from "./package-size.js";
 
+import {
+  parsePromotion,
+  type PromotionType,
+} from "./promotion.js";
+
 const FAMILY_PATTERNS: Array<[string, RegExp]> = [
   [
     "nut_butter",
@@ -56,7 +61,7 @@ const FAMILY_PATTERNS: Array<[string, RegExp]> = [
     "snacks",
     /\b(?:cookies|crackers|granola bars?|chocolate|brownies|candy|tarts?|cakes?|pies?|pastries?|samosas?|spring rolls?|peanut butter cups?|snack size)\b/i,
   ],
-  ["produce", /\b(?:avocados?|mangoes?|oranges?|grapes?|apples?|bananas?|tomatoes?|potatoes?|onions?|broccoli|mushrooms?|peppers?|cucumbers?|lettuce|salad|limes?|lemons?|berries|strawberries|blueberries|peaches?|pears?|pineapple|watermelon|zucchini|eggplant)\b/i],
+  ["produce", /\b(?:avocados?|mangoes?|oranges?|grapes?|apples?(?!\s+air[\s-]?tags?\b)|bananas?|tomatoes?|potatoes?|onions?|broccoli|mushrooms?|peppers?|cucumbers?|lettuce|salad|limes?|lemons?|berries|strawberries|blueberries|peaches?|pears?|pineapple|watermelon|zucchini|eggplant)\b/i],
   ["household", /\b(?:detergent|tissue|paper towels?|toilet paper|cleaner|dish soap|laundry)\b/i],
   ["personal_care", /\b(?:shampoo|conditioner|body wash|bubble bath|toothpaste|deodorant|razors?)\b/i],
 ];
@@ -94,6 +99,17 @@ export interface NormalizedFlyerOffer {
   unitPriceBasis: "100g" | "100ml" | "each" | null;
   currency: "CAD";
   promotionText: string | null;
+  promotionType: PromotionType;
+  promotionQuantity: number | null;
+  promotionTotalPrice: number | null;
+  promotionUnitPrice: number | null;
+  memberProgram: string | null;
+  memberPriceAmount: number | null;
+  nonMemberPriceAmount: number | null;
+  priceMinAmount: number | null;
+  priceMaxAmount: number | null;
+  conditionsText: string | null;
+  promotionConditions: Record<string, unknown>;
   validFrom: Date | null;
   validUntil: Date | null;
   observedAt: Date;
@@ -130,6 +146,30 @@ export function normalizeFlyerOffer(
 
   const advertisedPriceAmount = parsePriceAmount(item.price);
   const regularPriceAmount = parseRegularPrice(disclaimerText);
+  // Supplementary structured promotion evidence.
+  // Does not override validated pricing or review decisions.
+  const promotion = parsePromotion({
+    productName: item.name,
+    descriptionText,
+    priceText,
+    saleStory,
+    disclaimerText,
+    itemPrice: advertisedPriceAmount,
+    regularPriceAmount,
+    currentPriceRange: detail.current_price_range ?? null,
+    originalPriceRange: detail.original_price_range ?? null,
+    inStoreOnly: detail.in_store_only ?? null,
+  });
+
+  const conditionsText =
+    promotion.conditions.length > 0
+      ? promotion.conditions.join(" / ")
+      : null;
+
+  const promotionConditions: Record<string, unknown> = {
+    ...promotion,
+    quantityRequirement: promotion.quantity,
+  };
   const packageSize = parsePackageSize(descriptionText, item.name);
   const priceWeight = parsePriceWeight(descriptionText, priceText);
   const isMultiVariant = detectMultiVariant(item.name, descriptionText);
@@ -163,7 +203,8 @@ export function normalizeFlyerOffer(
     ? null
     : packageSize.quantityValue;
 
-  const safeUnitPrice = hasAmbiguousQuantity
+  // A bundle price does not establish the price of buying one item.
+  const safeUnitPrice = hasAmbiguousQuantity || isMultibuy
     ? null
     : unitPrice;
 
@@ -190,8 +231,8 @@ export function normalizeFlyerOffer(
     quantityUnit: packageSize.quantityUnit,
     quantityText: packageSize.text,
 
-    unitPrice: unitPrice?.value,
-    unitPriceBasis: unitPrice?.basis,
+    unitPrice: safeUnitPrice?.value,
+    unitPriceBasis: safeUnitPrice?.basis,
     pricingBasis,
     quantityIsApproximate: packageSize.isApproximate,
     isPriceRange: packageSize.isRange,
@@ -201,12 +242,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
   });
 
+  // Quantity-dependent offers cannot be treated as independently priced items.
   const reviewRequired =
-    validation.reviewRequired || isMultiVariant;
+    validation.reviewRequired || isMultiVariant || isMultibuy;
 
-  const finalReviewReasons = isMultiVariant
-    ? [...new Set([...validation.reasons, "MULTI_VARIANT"])]
-    : validation.reasons;
+  const finalReviewReasons = [
+    ...new Set([
+      ...validation.reasons,
+      ...(isMultiVariant ? ["MULTI_VARIANT"] : []),
+      ...(isMultibuy ? ["MULTIBUY"] : []),
+    ]),
+  ];
 
   const status = reviewRequired
   ? "PENDING_REVIEW"
@@ -246,6 +292,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
+    promotionType: promotion.type,
+    promotionQuantity: promotion.quantity,
+    promotionTotalPrice: promotion.totalPrice,
+    promotionUnitPrice: promotion.unitPrice,
+    memberProgram: promotion.memberProgram,
+    memberPriceAmount: promotion.memberPriceAmount,
+    nonMemberPriceAmount: promotion.nonMemberPriceAmount,
+    priceMinAmount: promotion.priceMin,
+    priceMaxAmount: promotion.priceMax,
+    conditionsText,
+    promotionConditions,
     unitPrice: safeUnitPrice?.value ?? null,
     unitPriceBasis: safeUnitPrice?.basis ?? null,
     validFrom: item.valid_from ?? flyer.valid_from,
@@ -275,6 +332,17 @@ export function normalizeFlyerOffer(
     isMultibuy,
     isMultiVariant,
     isPriceRange: packageSize.isRange,
+    promotionType: promotion.type,
+    promotionQuantity: promotion.quantity,
+    promotionTotalPrice: promotion.totalPrice,
+    promotionUnitPrice: promotion.unitPrice,
+    memberProgram: promotion.memberProgram,
+    memberPriceAmount: promotion.memberPriceAmount,
+    nonMemberPriceAmount: promotion.nonMemberPriceAmount,
+    priceMinAmount: promotion.priceMin,
+    priceMaxAmount: promotion.priceMax,
+    conditionsText,
+    promotionConditions,
     unitPrice: safeUnitPrice?.value ?? null,
     unitPriceBasis: safeUnitPrice?.basis ?? null,
     currency: "CAD",
@@ -407,7 +475,9 @@ function parseRegularPrice(disclaimerText: string): number | null {
 function detectMultibuy(text: string): boolean {
   return (
     /\b\d+\s*(?:for|\/)\s*\$?\s*\d+(?:\.\d+)?\b/i.test(text) ||
-    /\bmix and match\b/i.test(text)
+    /\bmix and match\b/i.test(text) ||
+    /\bbuy\s+\d+\s*,?\s*get\s+\d+\b/i.test(text) ||
+    /\bwhen\s+you\s+buy\s+\d+\b/i.test(text)
   );
 }
 

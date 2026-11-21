@@ -30,9 +30,10 @@ model User {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  roles      UserRole[]
-  preference UserPreference?
-  baskets    Basket[]
+  roles                UserRole[]
+  preference           UserPreference?
+  baskets              Basket[]
+  reviewedStagedOffers StagedOffer[]   @relation("StagedOfferReviewer")
 
   @@map("users")
 }
@@ -64,13 +65,15 @@ model UserRole {
 
 model Product {
   id          String  @id @default(uuid()) @db.Uuid
-  barcode     String  @unique @db.VarChar(64)
+  barcode     String? @unique @db.VarChar(64)
+  catalogKey  String? @unique @map("catalog_key") @db.VarChar(300)
   productName String  @map("product_name") @db.VarChar(500)
   brand       String? @db.VarChar(500)
 
   quantityValue Decimal? @map("quantity_value") @db.Decimal(12, 3)
   quantityUnit  String?  @map("quantity_unit") @db.VarChar(30)
   quantityText  String?  @map("quantity_text") @db.VarChar(150)
+  imageUrl      String?  @map("image_url") @db.VarChar(1000)
 
   categories String? @db.Text
 
@@ -78,6 +81,8 @@ model Product {
   priceObservations PriceObservation[]
   basketItems       BasketItem[]
   stagedOffers      StagedOffer[]
+  evidence          ProductEvidence[]
+  advertisedOffers  AdvertisedOffer[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -132,6 +137,7 @@ model Retailer {
   stores       Store[]
   flyers       Flyer[]
   stagedOffers StagedOffer[]
+  advertisedOffers AdvertisedOffer[]
 
   @@map("retailers")
 }
@@ -151,6 +157,7 @@ model Store {
 
   isActive          Boolean            @default(true) @map("is_active")
   priceObservations PriceObservation[]
+  advertisedOffers  AdvertisedOffer[]
   userPreferences   UserPreference[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -179,6 +186,8 @@ model SourceSystem {
   priceObservations PriceObservation[]
   flyers            Flyer[]
   stagedOffers      StagedOffer[]
+  productEvidence   ProductEvidence[]
+  advertisedOffers  AdvertisedOffer[]
 
   @@map("source_systems")
 }
@@ -228,6 +237,7 @@ model Flyer {
   sourceSystem SourceSystem  @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
   retailer     Retailer?     @relation(fields: [retailerId], references: [id], onDelete: SetNull)
   stagedOffers StagedOffer[]
+  advertisedOffers AdvertisedOffer[]
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -280,10 +290,21 @@ model StagedOffer {
   unitPriceBasis String?  @map("unit_price_basis") @db.VarChar(20)
   currency       String   @default("CAD") @db.VarChar(3)
 
-  promotionText String?   @map("promotion_text") @db.Text
-  validFrom     DateTime? @map("valid_from") @db.Timestamptz(6)
-  validUntil    DateTime? @map("valid_until") @db.Timestamptz(6)
-  observedAt    DateTime  @map("observed_at") @db.Timestamptz(6)
+  promotionText        String?   @map("promotion_text") @db.Text
+  promotionType        String    @default("NONE") @map("promotion_type") @db.VarChar(30)
+  promotionQuantity    Int?      @map("promotion_quantity")
+  promotionTotalPrice  Decimal?  @map("promotion_total_price") @db.Decimal(10, 3)
+  promotionUnitPrice   Decimal?  @map("promotion_unit_price") @db.Decimal(10, 4)
+  memberProgram        String?   @map("member_program") @db.VarChar(100)
+  memberPriceAmount    Decimal?  @map("member_price_amount") @db.Decimal(10, 3)
+  nonMemberPriceAmount Decimal?  @map("non_member_price_amount") @db.Decimal(10, 3)
+  priceMinAmount       Decimal?  @map("price_min_amount") @db.Decimal(10, 3)
+  priceMaxAmount       Decimal?  @map("price_max_amount") @db.Decimal(10, 3)
+  conditionsText       String?   @map("conditions_text") @db.Text
+  promotionConditions  Json?     @map("promotion_conditions") @db.JsonB
+  validFrom            DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil           DateTime? @map("valid_until") @db.Timestamptz(6)
+  observedAt           DateTime  @map("observed_at") @db.Timestamptz(6)
 
   imageUrl  String? @map("image_url") @db.VarChar(1000)
   sourceUrl String? @map("source_url") @db.VarChar(1000)
@@ -291,9 +312,13 @@ model StagedOffer {
   matchKey  String? @map("match_key") @db.VarChar(300)
   familyKey String? @map("family_key") @db.VarChar(150)
 
-  status         String  @default("PENDING_REVIEW") @db.VarChar(30)
-  reviewRequired Boolean @default(true) @map("review_required")
-  reviewReasons  Json    @map("review_reasons") @db.JsonB
+  status           String    @default("PENDING_REVIEW") @db.VarChar(30)
+  reviewRequired   Boolean   @default(true) @map("review_required")
+  reviewReasons    Json      @map("review_reasons") @db.JsonB
+  reviewDecision   String?   @map("review_decision") @db.VarChar(30)
+  reviewNotes      String?   @map("review_notes") @db.Text
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByUserId String?   @map("reviewed_by_user_id") @db.Uuid
 
   matchedProductId  String? @map("matched_product_id") @db.Uuid
   normalizedPayload Json    @map("normalized_payload") @db.JsonB
@@ -304,6 +329,7 @@ model StagedOffer {
   flyer Flyer? @relation(fields: [flyerId], references: [id], onDelete: Restrict)
   retailer       Retailer?    @relation(fields: [retailerId], references: [id], onDelete: SetNull)
   matchedProduct Product?     @relation(fields: [matchedProductId], references: [id], onDelete: SetNull)
+  reviewedBy     User?        @relation("StagedOfferReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -320,6 +346,8 @@ model StagedOffer {
   @@index([family, unitPriceBasis])
   @@index([matchKey])
   @@index([status, observedAt])
+  @@index([promotionType])
+  @@index([reviewDecision, reviewedAt])
   @@map("staged_offers")
 }
 
@@ -379,4 +407,63 @@ model UserPreference {
   @@index([usualStoreId])
   @@index([postalCode])
   @@map("user_preferences")
+}
+
+// Phase B.2 â€” canonical product data provenance. An evidence row is not proof of verification.
+model ProductEvidence {
+  id             String   @id @default(uuid()) @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  sourceSystemId String   @map("source_system_id") @db.Uuid
+  sourceRecordId String   @map("source_record_id") @db.VarChar(300)
+  evidenceType   String   @map("evidence_type") @db.VarChar(40)
+  verified       Boolean  @default(false)
+  capturedAt     DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  rawPayload     Json?    @map("raw_payload") @db.JsonB
+
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sourceSystem SourceSystem @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
+
+  @@index([productId, capturedAt])
+  @@index([sourceSystemId, sourceRecordId])
+  @@map("product_evidence")
+}
+
+// Phase B.2 â€” durable advertisement, independent from a single canonical SKU.
+model AdvertisedOffer {
+  id                    String    @id @default(uuid()) @db.Uuid
+  stableKey             String    @unique @map("stable_key") @db.VarChar(64)
+  sourceSystemId        String    @map("source_system_id") @db.Uuid
+  retailerId            String    @map("retailer_id") @db.Uuid
+  storeId               String?   @map("store_id") @db.Uuid
+  productId             String?   @map("product_id") @db.Uuid
+  flyerId               String?   @map("flyer_id") @db.Uuid
+  flyerExternalId       String    @map("flyer_external_id") @db.VarChar(100)
+  sourceRecordId        String    @map("source_record_id") @db.VarChar(300)
+  marketKey             String    @map("market_key") @db.VarChar(60)
+  productName           String    @map("product_name") @db.VarChar(500)
+  packageSizeText       String?   @map("package_size_text") @db.VarChar(200)
+  advertisedPriceAmount Decimal?  @map("advertised_price_amount") @db.Decimal(12, 3)
+  regularPriceAmount    Decimal?  @map("regular_price_amount") @db.Decimal(12, 3)
+  currency              String    @default("CAD") @db.VarChar(3)
+  promotionText         String?   @map("promotion_text") @db.Text
+  conditionEvidence     Json?     @map("condition_evidence") @db.JsonB
+  sourceUrl             String?   @map("source_url") @db.VarChar(1000)
+  rawPayload            Json?     @map("raw_payload") @db.JsonB
+  observedAt            DateTime  @map("observed_at") @db.Timestamptz(6)
+  validFrom             DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil            DateTime? @map("valid_until") @db.Timestamptz(6)
+  lastSeenAt            DateTime  @map("last_seen_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sourceSystem SourceSystem @relation(fields: [sourceSystemId], references: [id], onDelete: Restrict)
+  retailer     Retailer     @relation(fields: [retailerId], references: [id], onDelete: Restrict)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  flyer        Flyer?       @relation(fields: [flyerId], references: [id], onDelete: SetNull)
+
+  @@index([retailerId, validUntil])
+  @@index([productId, validUntil])
+  @@index([sourceSystemId, flyerExternalId, sourceRecordId])
+  @@map("advertised_offers")
 }

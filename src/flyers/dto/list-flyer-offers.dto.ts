@@ -32,6 +32,33 @@ export class ListFlyerOffersQueryDto {
   status?: "NORMALIZED" | "PENDING_REVIEW" | "ALL";
 
   @IsOptional()
+  @IsIn([
+    "NONE",
+    "MULTIBUY",
+    "MEMBER_PRICE",
+    "PRICE_RANGE",
+    "BOGO",
+    "SPEND_THRESHOLD",
+    "PURCHASE_LIMIT",
+    "IN_STORE_ONLY",
+    "POINTS_OFFER",
+    "OTHER",
+    "ANY",
+  ])
+  promotionType?:
+    | "NONE"
+    | "MULTIBUY"
+    | "MEMBER_PRICE"
+    | "PRICE_RANGE"
+    | "BOGO"
+    | "SPEND_THRESHOLD"
+    | "PURCHASE_LIMIT"
+    | "IN_STORE_ONLY"
+    | "POINTS_OFFER"
+    | "OTHER"
+    | "ANY";
+
+  @IsOptional()
   @IsIn(["unitPrice", "price", "name"])
   sort?: "unitPrice" | "price" | "name";
 
