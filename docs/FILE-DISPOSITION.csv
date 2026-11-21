@@ -1,0 +1,77 @@
+original_path,candidate_action,destination_or_reason
+scripts/capture-flipp-research.ts,RETAIN,scripts/capture-flipp-research.ts
+scripts/preview-b6-flipp-capture.mjs,RETAIN,scripts/preview-b6-flipp-capture.mjs
+scripts/ingest-flipp-capture.ts,RETAIN,scripts/ingest-flipp-capture.ts
+scripts/promote-flipp-advertised-offers.ts,RETAIN,scripts/promote-flipp-advertised-offers.ts
+scripts/promote-flipp-products.ts,RETAIN,scripts/promote-flipp-products.ts
+scripts/seed-calgary-stores.ts,RETAIN,scripts/seed-calgary-stores.ts
+scripts/analyze-flipp-archive.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/analyze-flipp-archive.mjs
+scripts/apply-approved-flipp-product-links.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/apply-approved-flipp-product-links.ts
+scripts/apply-b5-1-scope.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/apply-b5-1-scope.mjs
+scripts/audit-b5-final-integrity.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-b5-final-integrity.ts
+scripts/audit-b5-grouped-offers.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-b5-grouped-offers.ts
+scripts/audit-b5-product-candidates.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-b5-product-candidates.ts
+scripts/audit-flipp-conditions.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-flipp-conditions.mjs
+scripts/audit-flipp-multibuy-pricing.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-flipp-multibuy-pricing.ts
+scripts/audit-flipp-scope-v3.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-flipp-scope-v3.mjs
+scripts/audit-flipp-scope-v4.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-flipp-scope-v4.mjs
+scripts/audit-flipp-scope.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-flipp-scope.mjs
+scripts/audit-living-catalog.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-living-catalog.ts
+scripts/audit-living-staging.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-living-staging.ts
+scripts/audit-nov11-ingestion-readiness.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-nov11-ingestion-readiness.ts
+scripts/audit-phase-b-databases.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/audit-phase-b-databases.ts
+scripts/b54-approved-products.json,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/b54-approved-products.json
+scripts/b54-reviewed-links.json,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/b54-reviewed-links.json
+scripts/backup-safeway-staging.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/backup-safeway-staging.ts
+scripts/check-product-catalog.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/check-product-catalog.ts
+scripts/dry-run-product-matching.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/dry-run-product-matching.ts
+scripts/evaluate-ai-identity-readiness.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/evaluate-ai-identity-readiness.ts
+scripts/evaluate-flipp-advertisement-eligibility.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/evaluate-flipp-advertisement-eligibility.ts
+scripts/evaluate-flipp-scope-transitions.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/evaluate-flipp-scope-transitions.ts
+scripts/evaluate-product-reconstruction.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/evaluate-product-reconstruction.ts
+scripts/export-ai-identity-handoff.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/export-ai-identity-handoff.ts
+scripts/export-b5-scope-review.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/export-b5-scope-review.ts
+scripts/export-b65-comparison-handoff.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/export-b65-comparison-handoff.ts
+scripts/export-product-identity-catalog.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/export-product-identity-catalog.ts
+scripts/generate-flipp-product-review-batches.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/generate-flipp-product-review-batches.ts
+scripts/geocode-calgary-stores.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/geocode-calgary-stores.ts
+scripts/import-b6-historical-staging.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/import-b6-historical-staging.ts
+scripts/ingest-flyers.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/ingest-flyers.ts
+scripts/inspect-flyer-layout.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/inspect-flyer-layout.ts
+scripts/inspect-flyer-pdf.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/inspect-flyer-pdf.ts
+scripts/inspect-flyer-region.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/inspect-flyer-region.ts
+scripts/kavyo-handoff.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/kavyo-handoff.mjs
+scripts/kavyo-product-contract.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/kavyo-product-contract.mjs
+scripts/plan-flipp-product-linking.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/plan-flipp-product-linking.ts
+scripts/profile-flipp-review.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/profile-flipp-review.ts
+scripts/promote-b54-approved-products.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/promote-b54-approved-products.ts
+scripts/promote-b6-historical-advertisements.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/promote-b6-historical-advertisements.ts
+scripts/promote-b6-historical-products.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/promote-b6-historical-products.ts
+scripts/reconcile-ai-reconstructions.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/reconcile-ai-reconstructions.ts
+scripts/reconcile-b54-marcangelo.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/reconcile-b54-marcangelo.ts
+scripts/refresh-safeway-staging.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/refresh-safeway-staging.ts
+scripts/remediate-b54-linked-variants.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/remediate-b54-linked-variants.ts
+scripts/report-safeway.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/report-safeway.ts
+scripts/review-and-create-flipp-products.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/review-and-create-flipp-products.ts
+scripts/review-three-flipp-product-links.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/review-three-flipp-product-links.ts
+scripts/run-ai-evaluation.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/run-ai-evaluation.ts
+scripts/select-ai-evaluation-sample.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/select-ai-evaluation-sample.ts
+scripts/stage-safeway.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/stage-safeway.ts
+scripts/test-ai-associations.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-associations.ts
+scripts/test-ai-candidate-roles.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-candidate-roles.ts
+scripts/test-ai-flipp-item.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-flipp-item.ts
+scripts/test-ai-interpreter.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-interpreter.ts
+scripts/test-ai-product-groups.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-product-groups.ts
+scripts/test-ai-source-aware.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/test-ai-source-aware.ts
+scripts/verify-b6-candidates-db.ts,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/verify-b6-candidates-db.ts
+scripts/verify-b6-product-candidates.mjs,ARCHIVE,Kavyo-Ingestion-Development-Archive.zip/scripts/verify-b6-product-candidates.mjs
+scripts/run-flipp-ingestion.mjs,ADD,new operational entry point
+apply-phase-b2-schema.mjs,EXCLUDE,legacy/test-only artifact preserved in original user ZIP
+schema-phase-b2.patch,EXCLUDE,legacy/test-only artifact preserved in original user ZIP
+prisma/schema.prisma.before-phase-b2.bak,EXCLUDE,legacy/test-only artifact preserved in original user ZIP
+prisma/test-data/kavyo_test_data_final.sql,EXCLUDE,legacy/test-only artifact preserved in original user ZIP
+src/kavyob-6.zip,EXCLUDE,legacy/test-only artifact preserved in original user ZIP
+src/,RETAIN,preserve application code and automated tests
+prisma/schema.prisma,RETAIN,preserve application code and automated tests
+prisma/migrations/,RETAIN,preserve application code and automated tests
+test/,RETAIN,preserve application code and automated tests
