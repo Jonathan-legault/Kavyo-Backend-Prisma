@@ -103,3 +103,6 @@ data/raw/
 /data/reference/*Address_Audit.csv
 /kavyo-installation-review.zip
 /kavyo-calgary-dev-seed.zip
+
+# Authoritative flyer exports (restricted team distribution)
+/data/handoff/
