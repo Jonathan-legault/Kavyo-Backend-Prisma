@@ -6,7 +6,7 @@ import {
   selectBestAdvertisedOffer,
 } from "../basket/calculation/advertised-offer-pricing.js";
 import { toNumber } from "../basket/calculation/pricing.js";
-import { decimalToNumber } from "../flyers/offer-utils.js";
+import { decimalToNumber, toJsonObject } from "../flyers/offer-utils.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { ListProductsQueryDto } from "./dto/list-products.dto.js";
 
@@ -90,6 +90,9 @@ export class ProductsService {
     ]);
 
     const productIds = rows.map((row) => row.id);
+    const flyerImages = await this.flyerImageFallbacks(
+      rows.filter((row) => !row.imageUrl).map((row) => row.id),
+    );
     const nowOffers = await this.currentOffers(productIds, now);
     const offersByProduct = new Map<string, AdvertisedOfferInput[]>();
 
@@ -163,7 +166,7 @@ export class ProductsService {
           quantityValue: decimalToNumber(row.quantityValue),
           quantityUnit: row.quantityUnit,
           quantityText: row.quantityText,
-          imageUrl: row.imageUrl,
+          imageUrl: row.imageUrl ?? flyerImages.get(row.id) ?? null,
           categories: row.categories,
           category: row.categories ?? "OTHER",
           verifiedStorePriceCount: verifiedCounts.get(row.id) ?? 0,
@@ -192,6 +195,38 @@ export class ProductsService {
         };
       }),
     };
+  }
+
+  private async flyerImageFallbacks(
+    productIds: string[],
+  ): Promise<Map<string, string>> {
+    const images = new Map<string, string>();
+
+    if (productIds.length === 0) {
+      return images;
+    }
+
+    // Products approved before image support was added (or imported from a
+    // handoff archive) can have no stored image. Recover the flyer image from
+    // the latest linked advertisement instead of showing a placeholder.
+    const offers = await this.prisma.advertisedOffer.findMany({
+      where: { productId: { in: productIds } },
+      select: { productId: true, rawPayload: true, observedAt: true },
+      orderBy: { observedAt: "desc" },
+    });
+
+    for (const offer of offers) {
+      if (!offer.productId || images.has(offer.productId)) {
+        continue;
+      }
+
+      const imageUrl = imageUrlFromPayload(offer.rawPayload);
+      if (imageUrl) {
+        images.set(offer.productId, imageUrl);
+      }
+    }
+
+    return images;
   }
 
   private async currentOffers(
@@ -230,4 +265,31 @@ export class ProductsService {
       orderBy: { observedAt: "desc" },
     });
   }
+}
+
+function imageUrlFromPayload(
+  rawPayload: Prisma.JsonValue | null | undefined,
+): string | null {
+  const raw = toJsonObject(rawPayload);
+  const detail = toJsonObject(
+    raw?.detail as Prisma.JsonValue | null | undefined,
+  );
+  const item = toJsonObject(
+    raw?.item as Prisma.JsonValue | null | undefined,
+  );
+  const detailImage =
+    typeof detail?.image_url === "string" ? detail.image_url : null;
+  const cutoutImage =
+    typeof item?.cutout_image_url === "string" ? item.cutout_image_url : null;
+
+  return normalizeImageUrl(detailImage) ?? normalizeImageUrl(cutoutImage);
+}
+
+function normalizeImageUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/^http:\/\//i, "https://");
 }

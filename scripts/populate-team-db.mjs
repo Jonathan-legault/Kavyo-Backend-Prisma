@@ -177,6 +177,12 @@ async function main() {
       [flippScript, '--capture', resolve(repo, capture), '--write', '--backup-confirmed']);
   }
 
+  // Handoff archives can contain canonical products without a stored image.
+  // Copy the latest linked flyer image onto those products so the catalogue
+  // never renders placeholder art for products that have flyer photos.
+  run('Backfill product images from flyer offers', process.execPath,
+    [resolve(repo, 'scripts/backfill-product-images.mjs')]);
+
   const verify = await open(clientUrl.toString());
   try {
     await verifyIdentity(verify, DATABASE);
