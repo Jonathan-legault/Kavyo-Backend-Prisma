@@ -337,7 +337,7 @@ A portable SQL test fixture is available at:
 prisma/test-data/kavyo_test_data_final.sql
 ```
 
-The fixture contains:
+The  Prisma Client contains:
 
 - 5 grocery products
 - 3 retailers
